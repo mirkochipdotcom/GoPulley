@@ -248,29 +248,36 @@
             progressLabel.textContent = pct + '%';
         }
 
-        document.body.addEventListener('htmx:xhr:progress', function (e) {
-            if (e.detail.lengthComputable) {
-                const pct = Math.round(e.detail.loaded / e.detail.total * 100);
-                setProgress(pct);
-            }
-        });
+        function showProgressBar() {
+            setProgress(0);
+            progressWrap.removeAttribute('aria-hidden');
+            progressWrap.classList.add('visible');
+        }
 
-        document.body.addEventListener('htmx:beforeRequest', function (e) {
-            if (e.detail.elt && e.detail.elt.id === 'upload-form') {
-                setProgress(0);
-                progressWrap.removeAttribute('aria-hidden');
-                progressWrap.classList.add('visible');
-            }
+        function hideProgressBar() {
+            progressWrap.classList.remove('visible');
+            progressWrap.setAttribute('aria-hidden', 'true');
+            setTimeout(() => setProgress(0), 300);
+        }
+
+        // htmx:beforeSend: l'XHR esiste ma non è ancora partito.
+        // Aggiungiamo upload.onprogress per tracciare il vero avanzamento del file.
+        // Cap al 95%: il 100% scatta solo quando il server risponde davvero.
+        document.body.addEventListener('htmx:beforeSend', function (e) {
+            if (!e.detail.elt || e.detail.elt.id !== 'upload-form') return;
+            showProgressBar();
+            const xhr = e.detail.xhr;
+            xhr.upload.onprogress = function (evt) {
+                if (!evt.lengthComputable) return;
+                const pct = Math.min(95, Math.round(evt.loaded / evt.total * 100));
+                setProgress(pct);
+            };
         });
 
         document.body.addEventListener('htmx:afterRequest', function (e) {
             if (e.detail.elt && e.detail.elt.id === 'upload-form') {
                 setProgress(100);
-                setTimeout(() => {
-                    progressWrap.classList.remove('visible');
-                    progressWrap.setAttribute('aria-hidden', 'true');
-                    setProgress(0);
-                }, 800);
+                setTimeout(hideProgressBar, 800);
             }
             // Refresh lista dopo eliminazione
             if (e.detail.requestConfig && e.detail.requestConfig.verb === 'delete') {
