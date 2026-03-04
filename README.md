@@ -314,4 +314,4 @@ CREATE TABLE shares (
 
 ## Licenza
 
-MIT — vedi [LICENSE](LICENSE)
+GNU GPLv3 — vedi [LICENSE](LICENSE)
