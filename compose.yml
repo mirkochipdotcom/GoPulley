@@ -17,8 +17,5 @@ services:
     env_file:
       - .env
     volumes:
-      - gopulley-data:/data
-
-volumes:
-  gopulley-data:
-    driver: local
+      # DATA_DIR definito in .env — default ./data accanto a compose.yml
+      - ${DATA_DIR:-./data}:/data
