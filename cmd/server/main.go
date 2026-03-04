@@ -498,7 +498,7 @@ func main() {
 	if cfg.LDAPHost == "mock" {
 		log.Printf("⚠️  RUNNING IN MOCK MODE — any credentials accepted")
 	}
-	log.Printf("🚀 WeShare listening on http://0.0.0.0%s", addr)
+	log.Printf("🚀 GoPulley listening on http://0.0.0.0%s", addr)
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server: %v", err)
 	}
