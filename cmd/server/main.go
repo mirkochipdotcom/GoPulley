@@ -132,14 +132,15 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	ok, err := auth.Authenticate(username, password, a.cfg)
 	if err != nil {
 		log.Printf("auth error for %s: %v", username, err)
-		// HTMX: return inline error fragment
 		w.Header().Set("HX-Reswap", "outerHTML")
 		a.renderError(w, "Errore di connessione al server LDAP. Riprova.")
 		return
 	}
 	if !ok {
-		w.WriteHeader(http.StatusUnauthorized)
-		a.renderError(w, "Credenziali non valide. Riprova.")
+		log.Printf("login failed for %s: invalid credentials or not in required group", username)
+		w.Header().Set("HX-Reswap", "outerHTML")
+		// HTMX drops 4xx/5xx by default. We return 200 so the error message is displayed.
+		a.renderError(w, "Credenziali non valide o utente non autorizzato.")
 		return
 	}
 
