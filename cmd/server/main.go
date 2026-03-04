@@ -21,6 +21,16 @@ import (
 
 // ── App ─────────────────────────────────────────────────────────────────────
 
+var AppVersion = "unknown"
+
+func init() {
+	if b, err := os.ReadFile("VERSION"); err == nil {
+		AppVersion = strings.TrimSpace(string(b))
+	} else if b, err := os.ReadFile("../../VERSION"); err == nil {
+		AppVersion = strings.TrimSpace(string(b))
+	}
+}
+
 type App struct {
 	cfg       *config.Config
 	db        *database.DB
@@ -28,7 +38,7 @@ type App struct {
 	templates map[string]*template.Template
 }
 
-const sessionName = "we-share-session"
+const sessionName = "gopulley-session"
 
 // ── Template helpers ─────────────────────────────────────────────────────────
 
@@ -62,7 +72,7 @@ func (a *App) loadTemplates(baseDir string) error {
 	a.templates = make(map[string]*template.Template, len(names))
 	for _, name := range names {
 		path := filepath.Join(baseDir, name+".html")
-		tmpl, err := template.New(name+".html").Funcs(funcs).ParseFiles(path)
+		tmpl, err := template.New(name + ".html").Funcs(funcs).ParseFiles(path)
 		if err != nil {
 			return fmt.Errorf("parse template %s: %w", name, err)
 		}
@@ -116,6 +126,7 @@ func (a *App) handleRoot(w http.ResponseWriter, r *http.Request) {
 func (a *App) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "login", map[string]any{
 		"MockMode": a.cfg.LDAPHost == "mock",
+		"Version":  AppVersion,
 	})
 }
 
@@ -180,6 +191,7 @@ type dashData struct {
 	Shares   []*database.Share
 	MaxDays  int
 	BaseURL  string
+	Version  string
 }
 
 func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -201,6 +213,7 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Shares:   shares,
 		MaxDays:  a.cfg.MaxGlobalDays,
 		BaseURL:  baseURL,
+		Version:  AppVersion,
 	})
 }
 
@@ -358,8 +371,9 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 		Expired bool
 		Error   string
 		HumanSz string
+		Version string
 	}
-	data := dlData{}
+	data := dlData{Version: AppVersion}
 
 	if err != nil {
 		if err == sql.ErrNoRows {
