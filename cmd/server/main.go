@@ -277,8 +277,13 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
     <button class="btn btn-copy" onclick="copyLink()">Copia link</button>
   </div>
 </div>
+
 <script>
   setTimeout(() => { htmx.trigger('#shares-list', 'refresh'); }, 300);
+  document.getElementById('upload-form').reset();
+  document.getElementById('drop-title').textContent = 'Trascina qui il file';
+  document.getElementById('dropzone').classList.remove('has-file');
+  document.getElementById('upload-btn').disabled = true;
 </script>
 `,
 		template.HTMLEscapeString(originalName),
