@@ -68,11 +68,11 @@
                 <div class="upload-options">
                     <label class="options-label">Scadenza:</label>
                     <div class="days-selector">
-                        {{range $d := seq 1 7 14 30}}
+                        {{range $d := seq 1 7 30 365}}
                         {{if le $d $.MaxDays}}
                         <label class="day-option">
                             <input type="radio" name="days" value="{{$d}}" {{if eq $d 7}}checked{{end}}>
-                            <span>{{$d}}g</span>
+                            <span>{{if eq $d 365}}1 anno{{else}}{{$d}}g{{end}}</span>
                         </label>
                         {{end}}
                         {{end}}

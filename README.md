@@ -34,7 +34,7 @@ Tutto gira in un **singolo container** leggero (~25 MB), senza dipendenze estern
 | 🔐 **Login AD/LDAP** | Bind diretto sul Domain Controller, supporto `ldap://` e `ldaps://` |
 | 👥 **Restrizione per gruppo** | Accesso limitato ai membri di un gruppo AD specifico (`memberOf`) |
 | 📤 **Upload drag & drop** | Interfaccia moderna, senza refresh di pagina (HTMX) |
-| ⏱️ **Scadenza configurabile** | 1 / 7 / 14 / 30 giorni o valore custom |
+| ⏱️ **Scadenza configurabile** | 1 / 7 / 30 giorni / 1 anno o valore custom |
 | 🔗 **Link pubblici** | Chiunque con il link può scaricare, senza login |
 | 🗑️ **Pulizia automatica** | Goroutine elimina file e record scaduti ogni ora |
 | 🐳 **Single container** | Multi-stage Docker/Podman, immagine finale ~25 MB |
