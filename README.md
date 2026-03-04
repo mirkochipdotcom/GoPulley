@@ -13,6 +13,7 @@
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite)](https://sqlite.org)
 [![Docker](https://img.shields.io/badge/Docker-alpine-2496ED?logo=docker)](https://docker.com)
 [![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green)](LICENSE)
+[![Container](https://img.shields.io/badge/ghcr.io-gopulley-7c3aed?logo=github)](https://github.com/mirkochipdotcom/GoPulley/pkgs/container/gopulley)
 
 </div>
 
@@ -82,7 +83,9 @@ filesharing/
 │   └── static/
 │       ├── css/style.css           # Design system dark-mode (vanilla CSS)
 │       └── js/htmx.min.js          # HTMX 2.0.4 (vendored)
+├── .github/workflows/release.yml   # CI/CD: build + push su ghcr.io ad ogni tag
 ├── .env.example                    # Template configurazione
+├── compose.yml                     # Podman/Docker Compose
 ├── Dockerfile                      # Multi-stage build
 └── go.mod
 ```
@@ -98,21 +101,23 @@ filesharing/
 ### Avvio in 3 passi
 
 ```bash
-# 1. Clona il repository
-git clone https://github.com/mirkochipdotcom/GoPulley.git
-cd GoPulley
+# 1. Scarica i file necessari (non serve clonare l'intero repo)
+curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/compose.yml
+curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/.env.example
 
-# 2. Crea il file di configurazione
+# 2. Crea e configura il file .env
 cp .env.example .env
 # Modifica .env con i tuoi parametri LDAP (o lascia LDAP_HOST=mock per il dev)
 
-# 3. Avvia
-podman compose up -d --build
+# 3. Avvia — l'immagine viene scaricata automaticamente da ghcr.io
+podman compose up -d
 ```
 
 Apri il browser su **http://localhost:8080** — con `LDAP_HOST=mock` qualsiasi username/password è accettata.
 
 > **Docker?** Funziona identicamente: sostituisci `podman` con `docker` in tutti i comandi.
+
+> **Vuoi compilare dal sorgente?** Clona il repo e usa `podman compose up -d --build`.
 
 ---
 
@@ -174,8 +179,11 @@ LDAP_BIND_PASSWORD=password-servizio
 ## Avvio in produzione (Podman)
 
 ```bash
-# Adatta .env con i parametri produzione, poi:
-podman compose up -d --build
+# Prima volta
+podman compose up -d
+
+# Aggiornare all'ultima immagine
+podman compose pull && podman compose up -d
 
 # Logs
 podman compose logs -f
@@ -185,7 +193,7 @@ podman compose down
 podman compose up -d
 ```
 
-Il volume `gopulley-data` viene creato automaticamente e persiste il database SQLite e i file caricati tra i riavvii.
+Il volume `gopulley-data` persiste il database SQLite e i file caricati tra i riavvii.
 
 <details>
 <summary>Avvio manuale senza Compose</summary>
@@ -197,10 +205,29 @@ podman run -d \
   -p 8080:8080 \
   --env-file .env \
   -v gopulley-data:/data \
-  gopulley:latest
+  ghcr.io/mirkochipdotcom/gopulley:latest
 ```
 
 </details>
+
+---
+
+## Immagini container (CI/CD)
+
+Le immagini sono pubblicate automaticamente su **GitHub Container Registry** ad ogni tag tramite GitHub Actions:
+
+```bash
+# Ultima versione
+podman pull ghcr.io/mirkochipdotcom/gopulley:latest
+
+# Versione specifica
+podman pull ghcr.io/mirkochipdotcom/gopulley:0.9dev
+```
+
+Il workflow (`.github/workflows/release.yml`) si attiva con ogni `git push --tags` e:
+1. Compila il binario Go con la versione embedded via `-ldflags`
+2. Costruisce l'immagine Alpine multi-stage (~25 MB)
+3. Pubblica su `ghcr.io` con il tag del release e `latest`
 
 ---
 
