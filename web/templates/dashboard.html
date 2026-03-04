@@ -61,6 +61,11 @@
                         <p class="drop-sub">oppure clicca per selezionare</p>
                         <p class="drop-limit">Max {{.MaxDays}} giorni · Max 2 GB per file</p>
                     </div>
+                    <!-- Loading overlay -->
+                    <div class="dropzone-loading" id="dropzone-loading" aria-hidden="true">
+                        <div class="dz-spinner"></div>
+                        <span>Caricamento&hellip;</span>
+                    </div>
                     <input type="file" id="file-input" name="file" hidden onchange="onFileSelected(this)" />
                 </div>
 
@@ -121,13 +126,35 @@
     <script src="/static/js/htmx.min.js"></script>
     <script>
         // ── File selection ──────────────────────────────────────
+        function showDropLoading() {
+            const zone = document.getElementById('dropzone');
+            const overlay = document.getElementById('dropzone-loading');
+            zone.classList.add('dz-loading');
+            overlay.removeAttribute('aria-hidden');
+        }
+
+        function hideDropLoading() {
+            const zone = document.getElementById('dropzone');
+            const overlay = document.getElementById('dropzone-loading');
+            zone.classList.remove('dz-loading');
+            overlay.setAttribute('aria-hidden', 'true');
+        }
+
         function onFileSelected(input) {
             const btn = document.getElementById('upload-btn');
             const title = document.getElementById('drop-title');
             if (input.files.length > 0) {
-                title.textContent = input.files[0].name;
-                document.getElementById('dropzone').classList.add('has-file');
-                btn.disabled = false;
+                showDropLoading();
+                // Piccolo tick per lasciare che il browser applichi lo stile
+                // prima di aggiornare il testo (utile su file molto grandi)
+                requestAnimationFrame(() => {
+                    setTimeout(() => {
+                        title.textContent = input.files[0].name;
+                        document.getElementById('dropzone').classList.add('has-file');
+                        btn.disabled = false;
+                        hideDropLoading();
+                    }, 350);
+                });
             }
         }
 
@@ -137,11 +164,20 @@
             zone.classList.remove('dragover');
             const files = e.dataTransfer.files;
             if (files.length === 0) return;
+            showDropLoading();
             const input = document.getElementById('file-input');
             const dt = new DataTransfer();
             dt.items.add(files[0]);
             input.files = dt.files;
-            onFileSelected(input);
+            requestAnimationFrame(() => {
+                setTimeout(() => {
+                    const title = document.getElementById('drop-title');
+                    title.textContent = files[0].name;
+                    zone.classList.add('has-file');
+                    document.getElementById('upload-btn').disabled = false;
+                    hideDropLoading();
+                }, 350);
+            });
         }
 
         // ── Days selector ────────────────────────────────────────
