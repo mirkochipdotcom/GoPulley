@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="web/static/img/logo-icon.svg" alt="GoPulley" width="120" />
+
 # 🪝 GoPulley
 
 **Condivisione file aziendale — veloce, sicura, containerizzata**
