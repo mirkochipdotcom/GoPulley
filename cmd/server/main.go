@@ -34,8 +34,7 @@ const sessionName = "we-share-session"
 
 func (a *App) loadTemplates(baseDir string) error {
 	funcs := template.FuncMap{
-		"seq": func(vals ...int) []int { return vals },
-		"not": func(b bool) bool { return !b },
+		"seq":       func(vals ...int) []int { return vals },
 		"humanSize": storage.HumanSize,
 		"fmtDate": func(t time.Time) string {
 			return t.Format("02 Jan 2006 15:04")
@@ -128,6 +127,8 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := r.FormValue("password")
+
+	log.Printf("📥 Ricevuta richiesta di login per: %s", username)
 
 	ok, err := auth.Authenticate(username, password, a.cfg)
 	if err != nil {
