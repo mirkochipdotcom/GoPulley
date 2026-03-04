@@ -14,9 +14,11 @@ RUN go mod download
 COPY . .
 
 # Compile: static binary, strip debug info for minimal size
-RUN CGO_ENABLED=1 GOOS=linux \
+# Inject version from VERSION file via ldflags
+RUN VERSION=$(cat /build/VERSION | tr -d '[:space:]') && \
+  CGO_ENABLED=1 GOOS=linux \
   go build \
-  -ldflags="-s -w -extldflags '-static'" \
+  -ldflags="-s -w -extldflags '-static' -X main.AppVersion=${VERSION}" \
   -trimpath \
   -o we-share \
   ./cmd/server

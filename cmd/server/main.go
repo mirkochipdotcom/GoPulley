@@ -21,15 +21,8 @@ import (
 
 // ── App ─────────────────────────────────────────────────────────────────────
 
+// AppVersion is injected at build time via -ldflags "-X main.AppVersion=<ver>"
 var AppVersion = "unknown"
-
-func init() {
-	if b, err := os.ReadFile("VERSION"); err == nil {
-		AppVersion = strings.TrimSpace(string(b))
-	} else if b, err := os.ReadFile("../../VERSION"); err == nil {
-		AppVersion = strings.TrimSpace(string(b))
-	}
-}
 
 type App struct {
 	cfg       *config.Config

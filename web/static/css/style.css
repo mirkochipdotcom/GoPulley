@@ -255,14 +255,13 @@ a:hover {
 }
 
 .logo-image {
-  height: 48px;
+  height: 54px;
   width: auto;
   object-fit: contain;
 }
 
 .logo-text {
-  display: none;
-  /* The new logos already have the word GOPULLEY in them */
+  display: block;
 }
 
 .auth-title {
@@ -784,6 +783,16 @@ a:hover {
   font-family: monospace;
 }
 
+.version-tag a {
+  color: var(--c-text-3);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+
+.version-tag a:hover {
+  color: var(--c-accent-2);
+}
+
 .version-badge {
   background: var(--c-surface-2);
   color: var(--c-text-3);
@@ -794,6 +803,13 @@ a:hover {
   font-weight: 600;
   vertical-align: middle;
   font-family: monospace;
+  text-decoration: none;
+  transition: color var(--transition), border-color var(--transition);
+}
+
+a.version-badge:hover {
+  color: var(--c-accent-2);
+  border-color: var(--c-accent-2);
 }
 
 /* Empty state */

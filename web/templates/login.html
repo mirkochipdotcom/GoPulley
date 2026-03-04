@@ -14,40 +14,39 @@
 
   <div class="auth-card">
     <div class="auth-logo">
-      <img src="/static/img/logo.svg" alt="GoPulley Logo" class="logo-image">
-    </div>
-    <span class="logo-text">GoPulley</span>
-  </div>
-
-  <h1 class="auth-title">Bentornato</h1>
-  <p class="auth-subtitle">Accedi con le credenziali aziendali{{if .MockMode}} <span class="badge-dev">DEV
-      MODE</span>{{end}}</p>
-
-  <form hx-post="/login" hx-target="#login-error" hx-swap="outerHTML" hx-indicator="#spinner" class="auth-form">
-
-    <div class="field-group">
-      <label for="username">Username</label>
-      <input type="text" id="username" name="username" autocomplete="username" placeholder="nome.cognome" required
-        autofocus />
+      <img src="/static/img/logo-icon.svg" alt="GoPulley Logo" class="logo-image">
+      <span class="logo-text">GoPulley</span>
     </div>
 
-    <div class="field-group">
-      <label for="password">Password</label>
-      <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••"
-        required />
-    </div>
+    <h1 class="auth-title">Bentornato</h1>
+    <p class="auth-subtitle">Accedi con le credenziali aziendali{{if .MockMode}} <span class="badge-dev">DEV
+        MODE</span>{{end}}</p>
 
-    <p id="login-error" class="error-msg" aria-live="polite"></p>
+    <form hx-post="/login" hx-target="#login-error" hx-swap="outerHTML" hx-indicator="#spinner" class="auth-form">
 
-    <button type="submit" class="btn btn-primary btn-full">
-      <span id="spinner" class="htmx-indicator spinner-ring"></span>
-      Accedi
-    </button>
-  </form>
+      <div class="field-group">
+        <label for="username">Username</label>
+        <input type="text" id="username" name="username" autocomplete="username" placeholder="nome.cognome" required
+          autofocus />
+      </div>
+
+      <div class="field-group">
+        <label for="password">Password</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••"
+          required />
+      </div>
+
+      <p id="login-error" class="error-msg" aria-live="polite"></p>
+
+      <button type="submit" class="btn btn-primary btn-full">
+        <span id="spinner" class="htmx-indicator spinner-ring"></span>
+        Accedi
+      </button>
+    </form>
   </div>
 
   <div class="version-tag">
-    <span>v{{.Version}}</span>
+    <a href="https://github.com/mirkochipdotcom/GoPulley" target="_blank" rel="noopener">v{{.Version}}</a>
   </div>
 
   <script src="/static/js/htmx.min.js"></script>
