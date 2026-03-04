@@ -127,35 +127,28 @@
     <script>
         // ── File selection ──────────────────────────────────────
         function showDropLoading() {
-            const zone = document.getElementById('dropzone');
-            const overlay = document.getElementById('dropzone-loading');
-            zone.classList.add('dz-loading');
-            overlay.removeAttribute('aria-hidden');
+            document.getElementById('dropzone').classList.add('dz-loading');
         }
 
         function hideDropLoading() {
-            const zone = document.getElementById('dropzone');
-            const overlay = document.getElementById('dropzone-loading');
-            zone.classList.remove('dz-loading');
-            overlay.setAttribute('aria-hidden', 'true');
+            document.getElementById('dropzone').classList.remove('dz-loading');
         }
 
+        // Esegue il lavoro al tick successivo (dopo il paint dell'overlay)
+        // e garantisce che l'overlay sia visibile almeno MIN_MS millisecondi
+        const MIN_OVERLAY_MS = 200;
+
         function onFileSelected(input) {
-            const btn = document.getElementById('upload-btn');
-            const title = document.getElementById('drop-title');
-            if (input.files.length > 0) {
-                showDropLoading();
-                // Piccolo tick per lasciare che il browser applichi lo stile
-                // prima di aggiornare il testo (utile su file molto grandi)
-                requestAnimationFrame(() => {
-                    setTimeout(() => {
-                        title.textContent = input.files[0].name;
-                        document.getElementById('dropzone').classList.add('has-file');
-                        btn.disabled = false;
-                        hideDropLoading();
-                    }, 350);
-                });
-            }
+            if (input.files.length === 0) return;
+            showDropLoading();
+            const t0 = performance.now();
+            setTimeout(() => {
+                document.getElementById('drop-title').textContent = input.files[0].name;
+                document.getElementById('dropzone').classList.add('has-file');
+                document.getElementById('upload-btn').disabled = false;
+                const elapsed = performance.now() - t0;
+                setTimeout(hideDropLoading, Math.max(0, MIN_OVERLAY_MS - elapsed));
+            }, 0);
         }
 
         function handleDrop(e) {
@@ -164,20 +157,21 @@
             zone.classList.remove('dragover');
             const files = e.dataTransfer.files;
             if (files.length === 0) return;
+            const fileName = files[0].name;
+            const file = files[0];
             showDropLoading();
-            const input = document.getElementById('file-input');
-            const dt = new DataTransfer();
-            dt.items.add(files[0]);
-            input.files = dt.files;
-            requestAnimationFrame(() => {
-                setTimeout(() => {
-                    const title = document.getElementById('drop-title');
-                    title.textContent = files[0].name;
-                    zone.classList.add('has-file');
-                    document.getElementById('upload-btn').disabled = false;
-                    hideDropLoading();
-                }, 350);
-            });
+            const t0 = performance.now();
+            setTimeout(() => {
+                const input = document.getElementById('file-input');
+                const dt = new DataTransfer();
+                dt.items.add(file);
+                input.files = dt.files;
+                document.getElementById('drop-title').textContent = fileName;
+                zone.classList.add('has-file');
+                document.getElementById('upload-btn').disabled = false;
+                const elapsed = performance.now() - t0;
+                setTimeout(hideDropLoading, Math.max(0, MIN_OVERLAY_MS - elapsed));
+            }, 0);
         }
 
         // ── Days selector ────────────────────────────────────────
