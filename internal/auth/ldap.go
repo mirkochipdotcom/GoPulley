@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"crypto/tls"
 	"fmt"
 	"strings"
 
@@ -11,7 +12,12 @@ import (
 // Authenticate verifies username/password against the configured LDAP/AD server
 // and, if LDAP_REQUIRED_GROUP is set, checks that the user is a member of that group.
 //
-// If cfg.LDAPHost is "mock", any non-empty credentials are accepted (dev mode).
+// Supported connection modes (auto-detected from LDAP_HOST):
+//   - ldap://host:389  → tries plain, then StartTLS if server requires it
+//   - ldaps://host:636 → TLS from the start
+//
+// Set LDAP_TLS_SKIP_VERIFY=true for self-signed / internal CA certificates.
+// Set LDAP_HOST=mock to bypass LDAP entirely (dev mode).
 func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
@@ -23,68 +29,77 @@ func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 		return true, nil
 	}
 
+	// ── TLS CONFIG ──────────────────────────────────────────────────────────
+	tlsCfg := &tls.Config{
+		InsecureSkipVerify: cfg.LDAPTLSSkipVerify, //nolint:gosec
+		ServerName:         ldapHostname(cfg.LDAPHost),
+	}
+
 	// ── CONNECT ─────────────────────────────────────────────────────────────
-	l, err := ldap.DialURL(cfg.LDAPHost)
+	l, err := ldap.DialURL(cfg.LDAPHost, ldap.DialWithTLSConfig(tlsCfg))
 	if err != nil {
 		return false, fmt.Errorf("ldap dial: %w", err)
 	}
 	defer l.Close()
 
-	// ── USER BIND (credential check) ─────────────────────────────────────────
+	// ── StartTLS (per ldap:// su porta 389) ─────────────────────────────────
+	// Se il server chiude la connessione con EOF in plaintext, proviamo StartTLS.
+	if strings.HasPrefix(cfg.LDAPHost, "ldap://") {
+		if err := l.StartTLS(tlsCfg); err != nil {
+			// StartTLS non supportato/richiesto: continuiamo senza (alcuni AD lo permettono)
+			// Il vero errore verrà fuori al momento del bind se necessario.
+			_ = err
+		}
+	}
+
+	// ── USER BIND (verifica credenziali) ────────────────────────────────────
 	userDN := fmt.Sprintf(cfg.LDAPUserDNTemplate, username)
 	if err := l.Bind(userDN, password); err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials) {
-			return false, nil
+			return false, nil // credenziali errate → login fallito
 		}
-		return false, fmt.Errorf("ldap bind: %w", err)
+		return false, fmt.Errorf("ldap bind (%s): %w", userDN, err)
 	}
 
 	// ── GROUP MEMBERSHIP CHECK ───────────────────────────────────────────────
-	// If LDAP_REQUIRED_GROUP is set, search for the user and verify membership.
 	if cfg.LDAPRequiredGroup == "" {
 		return true, nil
 	}
 
-	// Optionally re-bind with a service account for the search query.
-	// This is needed when the user account doesn't have search privileges.
+	// Re-bind con service account se configurato (utile se l'utente non può cercare)
 	if cfg.LDAPBindDN != "" {
 		if err := l.Bind(cfg.LDAPBindDN, cfg.LDAPBindPassword); err != nil {
 			return false, fmt.Errorf("ldap service bind: %w", err)
 		}
 	}
 
-	// Search for the user object and retrieve its memberOf attributes.
-	// We support both sAMAccountName (AD) and uid (OpenLDAP) login styles.
+	// Cerca l'utente e legge memberOf
 	searchFilter := fmt.Sprintf(
 		"(|(sAMAccountName=%s)(userPrincipalName=%s)(uid=%s))",
 		ldap.EscapeFilter(username),
 		ldap.EscapeFilter(username),
-		ldap.EscapeFilter(username),
+		ldap.EscapeFilter(strings.Split(username, "@")[0]), // supporta UPN e username puro
 	)
 	searchReq := ldap.NewSearchRequest(
 		cfg.LDAPBaseDN,
-		ldap.ScopeWholeSubtree,
-		ldap.NeverDerefAliases,
+		ldap.ScopeWholeSubtree, ldap.NeverDerefAliases,
 		0, 0, false,
 		searchFilter,
-		[]string{"memberOf"},
+		[]string{"memberOf", "sAMAccountName", "cn"},
 		nil,
 	)
 
 	result, err := l.Search(searchReq)
 	if err != nil {
-		return false, fmt.Errorf("ldap search: %w", err)
+		return false, fmt.Errorf("ldap search (base=%s, filter=%s): %w", cfg.LDAPBaseDN, searchFilter, err)
 	}
 	if len(result.Entries) == 0 {
-		return false, nil // user not found in directory
+		return false, fmt.Errorf("ldap: user %q not found under base DN %q", username, cfg.LDAPBaseDN)
 	}
 
-	// Check all memberOf values for the required group name (case-insensitive).
+	// Verifica membership (case-insensitive, match CN= nel DN completo)
 	requiredLower := strings.ToLower(cfg.LDAPRequiredGroup)
 	for _, memberOf := range result.Entries[0].GetAttributeValues("memberOf") {
-		// memberOf values are full DNs like:
-		//   CN=ALL_USERS-SERVIZI_INTERNI,OU=Gruppi,DC=intranet,...
-		// Match either the full DN or just the CN= part.
 		memberLower := strings.ToLower(memberOf)
 		if strings.Contains(memberLower, "cn="+requiredLower) ||
 			strings.EqualFold(memberOf, requiredLower) {
@@ -92,6 +107,16 @@ func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 		}
 	}
 
-	// User authenticated but is not a member of the required group.
-	return false, nil
+	// Utente autenticato ma non nel gruppo richiesto
+	return false, fmt.Errorf("ldap: user %q authenticated but not in group %q", username, cfg.LDAPRequiredGroup)
+}
+
+// ldapHostname estrae l'hostname dal URL LDAP per la verifica TLS.
+func ldapHostname(ldapURL string) string {
+	s := strings.TrimPrefix(ldapURL, "ldaps://")
+	s = strings.TrimPrefix(s, "ldap://")
+	if i := strings.Index(s, ":"); i != -1 {
+		return s[:i]
+	}
+	return s
 }

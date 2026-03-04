@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds all runtime configuration loaded from environment variables.
@@ -12,6 +13,9 @@ type Config struct {
 	LDAPHost           string
 	LDAPBaseDN         string
 	LDAPUserDNTemplate string
+	// LDAPTLSSkipVerify: impostare a true solo per DC con certificato self-signed.
+	// Mai usare in produzione con certificati validi.
+	LDAPTLSSkipVerify bool
 	// LDAPBindDN + LDAPBindPassword: service account used for group-membership searches.
 	// If empty, the user's own authenticated session is reused.
 	LDAPBindDN         string
@@ -33,6 +37,7 @@ func Load() *Config {
 		LDAPHost:           getEnv("LDAP_HOST", "mock"),
 		LDAPBaseDN:         getEnv("LDAP_BASE_DN", "dc=example,dc=com"),
 		LDAPUserDNTemplate: getEnv("LDAP_USER_DN_TEMPLATE", "uid=%s,ou=Users,dc=example,dc=com"),
+		LDAPTLSSkipVerify:  getEnvBool("LDAP_TLS_SKIP_VERIFY", false),
 		LDAPBindDN:         getEnv("LDAP_BIND_DN", ""),
 		LDAPBindPassword:   getEnv("LDAP_BIND_PASSWORD", ""),
 		LDAPRequiredGroup:  getEnv("LDAP_REQUIRED_GROUP", ""),
@@ -55,6 +60,17 @@ func getEnvInt(key string, fallback int) int {
 		if i, err := strconv.Atoi(v); err == nil {
 			return i
 		}
+	}
+	return fallback
+}
+
+func getEnvBool(key string, fallback bool) bool {
+	v := strings.ToLower(os.Getenv(key))
+	if v == "true" || v == "1" || v == "yes" {
+		return true
+	}
+	if v == "false" || v == "0" || v == "no" {
+		return false
 	}
 	return fallback
 }
