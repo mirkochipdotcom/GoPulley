@@ -3,7 +3,9 @@ package auth
 import (
 	"crypto/tls"
 	"fmt"
+	"log"
 	"strings"
+	"time"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/youorg/gopulley/internal/config"
@@ -36,24 +38,35 @@ func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 	}
 
 	// ── CONNECT ─────────────────────────────────────────────────────────────
+	log.Printf("ldap: dialing %s", cfg.LDAPHost)
 	l, err := ldap.DialURL(cfg.LDAPHost, ldap.DialWithTLSConfig(tlsCfg))
 	if err != nil {
 		return false, fmt.Errorf("ldap dial: %w", err)
 	}
 	defer l.Close()
+	
+	l.SetTimeout(5 * time.Second)
 
 	// ── StartTLS (per ldap:// su porta 389) ─────────────────────────────────
-	// Se il server chiude la connessione con EOF in plaintext, proviamo StartTLS.
 	if strings.HasPrefix(cfg.LDAPHost, "ldap://") {
+		log.Printf("ldap: attempting StartTLS...")
 		if err := l.StartTLS(tlsCfg); err != nil {
-			// StartTLS non supportato/richiesto: continuiamo senza (alcuni AD lo permettono)
-			// Il vero errore verrà fuori al momento del bind se necessario.
-			_ = err
+			log.Printf("ldap: StartTLS failed/ignored: %v. Reconnecting in plain text...", err)
+			l.Close()
+			// Riconnettiti in chiaro poichè il socket precedente è rimasto "sporco"
+			l, err = ldap.DialURL(cfg.LDAPHost)
+			if err != nil {
+				return false, fmt.Errorf("ldap dial (fallback): %w", err)
+			}
+			l.SetTimeout(5 * time.Second)
+		} else {
+			log.Printf("ldap: StartTLS successful")
 		}
 	}
 
 	// ── USER BIND (verifica credenziali) ────────────────────────────────────
 	userDN := fmt.Sprintf(cfg.LDAPUserDNTemplate, username)
+	log.Printf("ldap: attempting bind for %s", userDN)
 	if err := l.Bind(userDN, password); err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials) {
 			return false, nil // credenziali errate → login fallito
