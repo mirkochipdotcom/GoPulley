@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="it">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GoPulley — Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+
+<body class="dash-body">
+
+    <!-- ── Navbar ── -->
+    <nav class="navbar">
+        <div class="nav-brand">
+            <div class="logo-icon logo-icon--sm">
+                <svg width="24" height="24" viewBox="0 0 36 36" fill="none">
+                    <rect width="36" height="36" rx="10" fill="url(#gnav)" />
+                    <path d="M10 18L16 24L26 12" stroke="white" stroke-width="2.5" stroke-linecap="round"
+                        stroke-linejoin="round" />
+                    <defs>
+                        <linearGradient id="gnav" x1="0" y1="0" x2="36" y2="36">
+                            <stop offset="0%" stop-color="#6366f1" />
+                            <stop offset="100%" stop-color="#8b5cf6" />
+                        </linearGradient>
+                    </defs>
+                </svg>
+            </div>
+            <span class="logo-text">GoPulley</span>
+        </div>
+        <div class="nav-user">
+            <span class="user-chip">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                </svg>
+                {{.Username}}
+            </span>
+            <form method="POST" action="/logout" style="margin:0">
+                <button type="submit" class="btn btn-ghost">Esci</button>
+            </form>
+        </div>
+    </nav>
+
+    <main class="dash-main">
+
+        <!-- ── Upload section ── -->
+        <section class="upload-section">
+            <h2 class="section-title">Carica un file</h2>
+
+            <form id="upload-form" hx-post="/upload" hx-target="#upload-result" hx-swap="innerHTML"
+                hx-encoding="multipart/form-data" hx-indicator="#upload-spinner" enctype="multipart/form-data">
+
+                <!-- Drag & Drop zone -->
+                <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()"
+                    ondragover="event.preventDefault(); this.classList.add('dragover')"
+                    ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
+                    <div class="dropzone-inner">
+                        <div class="drop-icon">
+                            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                                <polyline points="17 8 12 3 7 8" />
+                                <line x1="12" y1="3" x2="12" y2="15" />
+                            </svg>
+                        </div>
+                        <p class="drop-title" id="drop-title">Trascina qui il file</p>
+                        <p class="drop-sub">oppure clicca per selezionare</p>
+                        <p class="drop-limit">Max {{.MaxDays}} giorni · Max 2 GB per file</p>
+                    </div>
+                    <input type="file" id="file-input" name="file" hidden onchange="onFileSelected(this)" />
+                </div>
+
+                <!-- Expiry selector -->
+                <div class="upload-options">
+                    <label class="options-label">Scadenza:</label>
+                    <div class="days-selector">
+                        {{range $d := seq 1 7 14 30}}
+                        {{if le $d $.MaxDays}}
+                        <label class="day-option">
+                            <input type="radio" name="days" value="{{$d}}" {{if eq $d 7}}checked{{end}}>
+                            <span>{{$d}}g</span>
+                        </label>
+                        {{end}}
+                        {{end}}
+                        <label class="day-option">
+                            <input type="radio" name="days" value="custom" id="custom-radio">
+                            <span>Custom</span>
+                        </label>
+                    </div>
+                    <input type="number" id="custom-days-input" name="days" min="1" max="{{.MaxDays}}"
+                        placeholder="giorni" class="custom-days" style="display:none" />
+                </div>
+
+                <button type="submit" class="btn btn-primary btn-upload" id="upload-btn" disabled>
+                    <span id="upload-spinner" class="htmx-indicator spinner-ring"></span>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="17 8 12 3 7 8" />
+                        <line x1="12" y1="3" x2="12" y2="15" />
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                    </svg>
+                    Carica
+                </button>
+            </form>
+
+            <!-- HTMX upload result -->
+            <div id="upload-result"></div>
+        </section>
+
+        <!-- ── Shares list ── -->
+        <section class="shares-section">
+            <div class="section-header">
+                <h2 class="section-title">Le tue condivisioni</h2>
+                <span class="shares-count">{{len .Shares}} attive</span>
+            </div>
+
+            <div id="shares-list" hx-get="/shares-list" hx-trigger="refresh" hx-swap="innerHTML">
+                {{template "shares-list" .}}
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ── Toast ── -->
+    <div id="toast" class="toast" aria-live="polite"></div>
+
+    <script src="/static/js/htmx.min.js"></script>
+    <script>
+        // ── File selection ──────────────────────────────────────
+        function onFileSelected(input) {
+            const btn = document.getElementById('upload-btn');
+            const title = document.getElementById('drop-title');
+            if (input.files.length > 0) {
+                title.textContent = input.files[0].name;
+                document.getElementById('dropzone').classList.add('has-file');
+                btn.disabled = false;
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            const zone = document.getElementById('dropzone');
+            zone.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length === 0) return;
+            const input = document.getElementById('file-input');
+            const dt = new DataTransfer();
+            dt.items.add(files[0]);
+            input.files = dt.files;
+            onFileSelected(input);
+        }
+
+        // ── Days selector ────────────────────────────────────────
+        document.querySelectorAll('input[name="days"]').forEach(r => {
+            r.addEventListener('change', () => {
+                const customInput = document.getElementById('custom-days-input');
+                if (r.value === 'custom') {
+                    customInput.style.display = 'inline-block';
+                    customInput.name = 'days';
+                    // Disable the radio inputs so only the number input is submitted
+                    document.querySelectorAll('input[type=radio][name=days]').forEach(x => x.name = '_days_radio');
+                    customInput.name = 'days';
+                } else {
+                    customInput.style.display = 'none';
+                }
+            });
+        });
+
+        // ── Copy link ────────────────────────────────────────────
+        function copyLink() {
+            const inp = document.getElementById('share-link');
+            if (!inp) return;
+            navigator.clipboard.writeText(inp.value).then(() => showToast('Link copiato negli appunti!'));
+        }
+
+        function copyShareLink(url) {
+            navigator.clipboard.writeText(url).then(() => showToast('Link copiato negli appunti!'));
+        }
+
+        // ── Toast ────────────────────────────────────────────────
+        function showToast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg;
+            t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 2800);
+        }
+
+        // ── HTMX: after delete, refresh the list ─────────────────
+        document.body.addEventListener('htmx:afterRequest', function (e) {
+            if (e.detail.requestConfig && e.detail.requestConfig.verb === 'delete') {
+                htmx.trigger('#shares-list', 'refresh');
+            }
+        });
+    </script>
+</body>
+
+</html>
+
+{{/* ── Partial template: shares table (also used for HTMX refresh) ── */}}
+{{define "shares-list"}}
+{{if not .Shares}}
+<div class="empty-state">
+    <div class="empty-icon">📭</div>
+    <p>Nessuna condivisione attiva.</p>
+    <p class="text-muted">Carica il tuo primo file qui sopra.</p>
+</div>
+{{else}}
+<div class="shares-table-wrap">
+    <table class="shares-table">
+        <thead>
+            <tr>
+                <th>File</th>
+                <th>Dimensione</th>
+                <th>Scadenza</th>
+                <th>Download</th>
+                <th>Link</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Shares}}
+            <tr id="share-{{.Token}}">
+                <td class="td-filename">
+                    <span class="file-icon-sm">📄</span>
+                    {{.OriginalName}}
+                </td>
+                <td>{{humanSize .SizeBytes}}</td>
+                <td>
+                    {{if isExpired .ExpiresAt}}
+                    <span class="badge badge-expired">Scaduto</span>
+                    {{else}}
+                    <span class="badge badge-active">{{daysLeft .ExpiresAt}}</span>
+                    {{end}}
+                </td>
+                <td class="td-center">{{.Downloaded}}</td>
+                <td>
+                    {{if not (isExpired .ExpiresAt)}}
+                    <button class="btn btn-xs btn-ghost" onclick="copyShareLink('{{$.BaseURL}}/d/{{.Token}}')">
+                        Copia link
+                    </button>
+                    {{else}}
+                    <span class="text-muted">—</span>
+                    {{end}}
+                </td>
+                <td>
+                    <button class="btn btn-xs btn-danger" hx-delete="/share/{{.Token}}" hx-target="#share-{{.Token}}"
+                        hx-swap="outerHTML swap:0.3s" hx-confirm="Eliminare questa condivisione?">
+                        Elimina
+                    </button>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+{{end}}

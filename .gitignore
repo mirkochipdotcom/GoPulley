@@ -1,0 +1,22 @@
+# GoPulley — .gitignore
+
+# Configurazione locale con credenziali — MAI committare!
+.env
+
+# Binario compilato
+we-share
+gopulley
+*.exe
+
+# Database e upload locali
+*.db
+uploads/
+tmp-uploads/
+tmp-test.db
+
+# Go build cache
+/vendor/
+
+# OS
+.DS_Store
+Thumbs.db
