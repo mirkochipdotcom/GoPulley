@@ -45,7 +45,7 @@
                 hx-encoding="multipart/form-data" hx-indicator="#upload-spinner" enctype="multipart/form-data">
 
                 <!-- Drag & Drop zone -->
-                <div class="dropzone" id="dropzone" onclick="document.getElementById('file-input').click()"
+                <div class="dropzone" id="dropzone" onclick="openFilePicker()"
                     ondragover="event.preventDefault(); this.classList.add('dragover')"
                     ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
                     <div class="dropzone-inner">
@@ -139,23 +139,46 @@
             document.getElementById('dropzone').classList.remove('dz-loading');
         }
 
-        // Doppio rAF: garantisce che il browser esegua almeno un frame di paint
-        // prima di eseguire il lavoro → l'overlay diventa visibile per davvero.
-        // Dopo il lavoro l'overlay resta visibile almeno MIN_OVERLAY_MS.
-        const MIN_OVERLAY_MS = 400;
-
+        // Doppio rAF: garantisce un frame di paint prima del lavoro
         function afterPaint(fn) {
             requestAnimationFrame(() => requestAnimationFrame(fn));
         }
 
+        // ── File picker via click ─────────────────────────────────
+        // Mostriamo il loading PRIMA che la dialog si apra (nel click),
+        // così non c'è freeze visibile. Se l'utente annulla, lo nasconde
+        // il listener sul focus della window.
+        let pickerOpen = false;
+
+        function openFilePicker() {
+            showDropLoading();
+            pickerOpen = true;
+            document.getElementById('file-input').click();
+        }
+
+        // Quando la dialog si chiude (conferma O annulla) la window
+        // riceve il focus. Se non è stato selezionato nessun file,
+        // nascondiamo il loading dopo un breve attimo.
+        window.addEventListener('focus', function onWinFocus() {
+            if (!pickerOpen) return;
+            setTimeout(() => {
+                pickerOpen = false;
+                const input = document.getElementById('file-input');
+                if (!input.files || input.files.length === 0) {
+                    hideDropLoading();
+                }
+            }, 200);
+        });
+
         function onFileSelected(input) {
             if (input.files.length === 0) return;
-            showDropLoading();
+            pickerOpen = false;
+            // Loading già visibile dal click — aggiorniamo il DOM nel prossimo paint
             afterPaint(() => {
                 document.getElementById('drop-title').textContent = input.files[0].name;
                 document.getElementById('dropzone').classList.add('has-file');
                 document.getElementById('upload-btn').disabled = false;
-                setTimeout(hideDropLoading, MIN_OVERLAY_MS);
+                hideDropLoading();
             });
         }
 
@@ -176,7 +199,7 @@
                 document.getElementById('drop-title').textContent = fileName;
                 zone.classList.add('has-file');
                 document.getElementById('upload-btn').disabled = false;
-                setTimeout(hideDropLoading, MIN_OVERLAY_MS);
+                hideDropLoading();
             });
         }
 
