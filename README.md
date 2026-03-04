@@ -109,7 +109,8 @@ curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/.env.exa
 cp .env.example .env
 # Modifica .env con i tuoi parametri LDAP (o lascia LDAP_HOST=mock per il dev)
 
-# 3. Avvia — l'immagine viene scaricata automaticamente da ghcr.io
+# 3. Crea la cartella dati locale e avvia
+mkdir -p ./data/uploads
 podman compose up -d
 ```
 
@@ -118,6 +119,31 @@ Apri il browser su **http://localhost:8080** — con `LDAP_HOST=mock` qualsiasi 
 > **Docker?** Funziona identicamente: sostituisci `podman` con `docker` in tutti i comandi.
 
 > **Vuoi compilare dal sorgente?** Clona il repo e usa `podman compose up -d --build`.
+
+### Dove vengono salvati i dati
+
+Per default il volume è mappato su `./data` (accanto a `compose.yml`). Per cambiare percorso imposta `DATA_DIR` nel `.env`:
+
+```env
+# Default — cartella locale accanto a compose.yml
+DATA_DIR=./data
+
+# Disco dedicato
+DATA_DIR=/mnt/disco-dati/gopulley
+
+# Share di rete (NFS o CIFS già montato sull'host)
+DATA_DIR=/mnt/nas/gopulley
+```
+
+> **Mapping di rete (NFS/SMB):** monta prima la share sull'host con `mount` o `/etc/fstab`, poi punta `DATA_DIR` al mountpoint. GoPulley non ha bisogno di configurazioni aggiuntive — usa il filesystem del mountpoint come qualsiasi altra directory.
+>
+> Esempio con CIFS:
+> ```bash
+> sudo mount -t cifs //nas.esempio.it/gopulley /mnt/nas/gopulley \
+>   -o username=utente,password=secret,uid=1001,gid=1001
+> # poi in .env:
+> # DATA_DIR=/mnt/nas/gopulley
+> ```
 
 ---
 
@@ -193,7 +219,7 @@ podman compose down
 podman compose up -d
 ```
 
-Il volume `gopulley-data` persiste il database SQLite e i file caricati tra i riavvii.
+Il volume è mappato sulla directory `./data` (o sul percorso definito in `DATA_DIR` nel `.env`) e persiste il database SQLite e i file caricati tra i riavvii.
 
 <details>
 <summary>Avvio manuale senza Compose</summary>

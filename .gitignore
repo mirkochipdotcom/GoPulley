@@ -14,6 +14,9 @@ uploads/
 tmp-uploads/
 tmp-test.db
 
+# Cartella dati locale (bind mount — non versionare mai i file caricati)
+/data/
+
 # Go build cache
 /vendor/
 
