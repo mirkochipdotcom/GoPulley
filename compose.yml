@@ -1,0 +1,22 @@
+# GoPulley — Podman / Docker Compose
+# Utilizzo:
+#   1. cp .env.example .env
+#   2. Adatta .env al tuo ambiente
+#   3. podman compose up -d      (oppure: docker compose up -d)
+
+services:
+  gopulley:
+    build: .
+    image: gopulley:latest
+    container_name: gopulley
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    env_file:
+      - .env
+    volumes:
+      - gopulley-data:/data
+
+volumes:
+  gopulley-data:
+    driver: local

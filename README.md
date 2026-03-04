@@ -93,26 +93,26 @@ filesharing/
 
 ### Prerequisiti
 
-- Docker o Podman
+- Podman 4.7+ (oppure Docker con il plugin Compose)
 
-### Avvio in modalità sviluppo (mock LDAP)
+### Avvio in 3 passi
 
 ```bash
+# 1. Clona il repository
 git clone https://github.com/mirkochipdotcom/GoPulley.git
 cd GoPulley
 
-docker build -t gopulley:latest .
+# 2. Crea il file di configurazione
+cp .env.example .env
+# Modifica .env con i tuoi parametri LDAP (o lascia LDAP_HOST=mock per il dev)
 
-docker run -d \
-  --name gopulley \
-  -p 8080:8080 \
-  -e SESSION_SECRET=dev-secret-locale \
-  -e LDAP_HOST=mock \
-  -v gopulley-data:/data \
-  gopulley:latest
+# 3. Avvia
+podman compose up -d --build
 ```
 
-Apri il browser su **http://localhost:8080** — in mock mode qualsiasi username/password è accettata.
+Apri il browser su **http://localhost:8080** — con `LDAP_HOST=mock` qualsiasi username/password è accettata.
+
+> **Docker?** Funziona identicamente: sostituisci `podman` con `docker` in tutti i comandi.
 
 ---
 
@@ -174,30 +174,33 @@ LDAP_BIND_PASSWORD=password-servizio
 ## Avvio in produzione (Podman)
 
 ```bash
-podman run -d \
-  --name gopulley \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  --env-file /etc/gopulley/.env \
-  -v gopulley-data:/data \
-  gopulley:latest
+# Adatta .env con i parametri produzione, poi:
+podman compose up -d --build
+
+# Logs
+podman compose logs -f
+
+# Stop / restart
+podman compose down
+podman compose up -d
 ```
 
-Oppure con variabili esplicite:
+Il volume `gopulley-data` viene creato automaticamente e persiste il database SQLite e i file caricati tra i riavvii.
+
+<details>
+<summary>Avvio manuale senza Compose</summary>
 
 ```bash
 podman run -d \
   --name gopulley \
+  --restart unless-stopped \
   -p 8080:8080 \
-  -e SESSION_SECRET=$(openssl rand -hex 32) \
-  -e LDAP_HOST=ldaps://dc.azienda.it:636 \
-  -e LDAP_BASE_DN=DC=azienda,DC=it \
-  -e LDAP_USER_DN_TEMPLATE=%s@azienda.it \
-  -e LDAP_REQUIRED_GROUP=NOME-GRUPPO \
-  -e MAX_GLOBAL_DAYS=30 \
+  --env-file .env \
   -v gopulley-data:/data \
   gopulley:latest
 ```
+
+</details>
 
 ---
 
