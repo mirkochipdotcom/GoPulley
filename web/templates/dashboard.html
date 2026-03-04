@@ -100,6 +100,12 @@
                     </svg>
                     Carica
                 </button>
+
+                <!-- Upload progress bar -->
+                <div class="upload-progress-wrap" id="upload-progress-wrap" aria-hidden="true">
+                    <div class="upload-progress-bar" id="upload-progress-bar"></div>
+                    <span class="upload-progress-label" id="upload-progress-label">0%</span>
+                </div>
             </form>
 
             <!-- HTMX upload result -->
@@ -129,26 +135,28 @@
         function showDropLoading() {
             document.getElementById('dropzone').classList.add('dz-loading');
         }
-
         function hideDropLoading() {
             document.getElementById('dropzone').classList.remove('dz-loading');
         }
 
-        // Esegue il lavoro al tick successivo (dopo il paint dell'overlay)
-        // e garantisce che l'overlay sia visibile almeno MIN_MS millisecondi
-        const MIN_OVERLAY_MS = 200;
+        // Doppio rAF: garantisce che il browser esegua almeno un frame di paint
+        // prima di eseguire il lavoro → l'overlay diventa visibile per davvero.
+        // Dopo il lavoro l'overlay resta visibile almeno MIN_OVERLAY_MS.
+        const MIN_OVERLAY_MS = 400;
+
+        function afterPaint(fn) {
+            requestAnimationFrame(() => requestAnimationFrame(fn));
+        }
 
         function onFileSelected(input) {
             if (input.files.length === 0) return;
             showDropLoading();
-            const t0 = performance.now();
-            setTimeout(() => {
+            afterPaint(() => {
                 document.getElementById('drop-title').textContent = input.files[0].name;
                 document.getElementById('dropzone').classList.add('has-file');
                 document.getElementById('upload-btn').disabled = false;
-                const elapsed = performance.now() - t0;
-                setTimeout(hideDropLoading, Math.max(0, MIN_OVERLAY_MS - elapsed));
-            }, 0);
+                setTimeout(hideDropLoading, MIN_OVERLAY_MS);
+            });
         }
 
         function handleDrop(e) {
@@ -160,8 +168,7 @@
             const fileName = files[0].name;
             const file = files[0];
             showDropLoading();
-            const t0 = performance.now();
-            setTimeout(() => {
+            afterPaint(() => {
                 const input = document.getElementById('file-input');
                 const dt = new DataTransfer();
                 dt.items.add(file);
@@ -169,9 +176,8 @@
                 document.getElementById('drop-title').textContent = fileName;
                 zone.classList.add('has-file');
                 document.getElementById('upload-btn').disabled = false;
-                const elapsed = performance.now() - t0;
-                setTimeout(hideDropLoading, Math.max(0, MIN_OVERLAY_MS - elapsed));
-            }, 0);
+                setTimeout(hideDropLoading, MIN_OVERLAY_MS);
+            });
         }
 
         // ── Days selector ────────────────────────────────────────
@@ -209,8 +215,41 @@
             setTimeout(() => t.classList.remove('show'), 2800);
         }
 
-        // ── HTMX: after delete, refresh the list ─────────────────
+        // ── Upload progress bar ───────────────────────────────────
+        const progressWrap = document.getElementById('upload-progress-wrap');
+        const progressBar  = document.getElementById('upload-progress-bar');
+        const progressLabel = document.getElementById('upload-progress-label');
+
+        function setProgress(pct) {
+            progressBar.style.width = pct + '%';
+            progressLabel.textContent = pct + '%';
+        }
+
+        document.body.addEventListener('htmx:xhr:progress', function (e) {
+            if (e.detail.lengthComputable) {
+                const pct = Math.round(e.detail.loaded / e.detail.total * 100);
+                setProgress(pct);
+            }
+        });
+
+        document.body.addEventListener('htmx:beforeRequest', function (e) {
+            if (e.detail.elt && e.detail.elt.id === 'upload-form') {
+                setProgress(0);
+                progressWrap.removeAttribute('aria-hidden');
+                progressWrap.classList.add('visible');
+            }
+        });
+
         document.body.addEventListener('htmx:afterRequest', function (e) {
+            if (e.detail.elt && e.detail.elt.id === 'upload-form') {
+                setProgress(100);
+                setTimeout(() => {
+                    progressWrap.classList.remove('visible');
+                    progressWrap.setAttribute('aria-hidden', 'true');
+                    setProgress(0);
+                }, 800);
+            }
+            // Refresh lista dopo eliminazione
             if (e.detail.requestConfig && e.detail.requestConfig.verb === 'delete') {
                 htmx.trigger('#shares-list', 'refresh');
             }

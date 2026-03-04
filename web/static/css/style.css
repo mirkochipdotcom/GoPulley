@@ -167,6 +167,43 @@ a:hover {
   justify-content: center;
 }
 
+/* Upload progress bar */
+.upload-progress-wrap {
+  position: relative;
+  height: 6px;
+  background: var(--c-surface-2);
+  border-radius: 99px;
+  margin-top: 0.75rem;
+  overflow: hidden;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+}
+
+.upload-progress-wrap.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.upload-progress-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--c-accent), var(--c-accent-2));
+  border-radius: 99px;
+  transition: width 0.2s ease;
+}
+
+.upload-progress-label {
+  display: block;
+  text-align: right;
+  font-size: 0.75rem;
+  color: var(--c-text-2);
+  margin-top: 0.25rem;
+}
+
 .btn-dl {
   padding: 0.9rem 2.5rem;
   font-size: 1.05rem;
