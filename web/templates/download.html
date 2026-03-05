@@ -18,6 +18,13 @@
                 <img src="/static/img/logo-icon.svg" alt="GoPulley Logo" class="logo-image">
             </div>
             <span class="logo-text">GoPulley</span>
+            {{if .BrandName}}
+            <div class="brand-divider"></div>
+            <div class="brand-logo">
+                {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
+                <span class="brand-name">{{.BrandName}}</span>
+            </div>
+            {{end}}
         </div>
 
         {{if .Error}}
