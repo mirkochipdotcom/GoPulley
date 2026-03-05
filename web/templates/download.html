@@ -53,11 +53,11 @@
             <div class="file-meta">
                 <span class="meta-chip">{{.HumanSz}}</span>
                 <span class="meta-chip">⏳ Scade {{daysLeft .Share.ExpiresAt}}</span>
-                <span class="meta-chip">↓ {{.Share.Downloaded}} download</span>
+                <span class="meta-chip" id="dl-count">↓ {{.Share.Downloaded}} download</span>
             </div>
             <p class="text-muted">Condiviso da <strong>{{.Share.Uploader}}</strong></p>
 
-            <a href="/download/{{.Share.Token}}" class="btn btn-primary btn-dl">
+            <a href="/download/{{.Share.Token}}" class="btn btn-primary btn-dl" id="dl-btn">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                     stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
@@ -75,6 +75,15 @@
     <div class="version-tag">
         <a href="https://github.com/mirkochipdotcom/GoPulley" target="_blank" rel="noopener">v{{.Version}}</a>
     </div>
+
+    <script>
+        document.getElementById('dl-btn')?.addEventListener('click', function () {
+            const chip = document.getElementById('dl-count');
+            if (!chip) return;
+            const n = parseInt(chip.textContent.match(/\d+/) ?? [0]) + 1;
+            chip.textContent = '↓ ' + n + ' download';
+        });
+    </script>
 
 </body>
 
