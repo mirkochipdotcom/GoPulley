@@ -18,4 +18,4 @@ services:
       - .env
     volumes:
       # DATA_DIR definito in .env — default ./data accanto a compose.yml
-      - ${DATA_DIR:-./data}:/data
+      - ${DATA_DIR:-./data}:/data:rw,Z
