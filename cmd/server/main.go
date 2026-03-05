@@ -104,6 +104,20 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+// publicBaseURL restituisce la base URL pubblica (schema+host) da usare nei link
+// di download condivisi. Usa PUBLIC_BASE_URL se configurato, altrimenti lo inferisce
+// dalla request (utile solo quando le due porte coincidono o in sviluppo locale).
+func (a *App) publicBaseURL(r *http.Request) string {
+	if a.cfg.PublicBaseURL != "" {
+		return a.cfg.PublicBaseURL
+	}
+	scheme := "http"
+	if r.TLS != nil {
+		scheme = "https"
+	}
+	return fmt.Sprintf("%s://%s", scheme, r.Host)
+}
+
 // ── Handlers ─────────────────────────────────────────────────────────────────
 
 // GET /
@@ -195,11 +209,7 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		shares = nil
 	}
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
+	baseURL := a.publicBaseURL(r)
 
 	a.render(w, "dashboard", dashData{
 		Username: username,
@@ -261,11 +271,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	downloadURL := fmt.Sprintf("%s://%s/d/%s", scheme, r.Host, share.Token)
+	downloadURL := fmt.Sprintf("%s/d/%s", a.publicBaseURL(r), share.Token)
 
 	// Return HTMX response: a success card
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -338,11 +344,7 @@ func (a *App) handleSharesList(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
 	shares, _ := a.db.ListSharesByUser(username)
 
-	scheme := "http"
-	if r.TLS != nil {
-		scheme = "https"
-	}
-	baseURL := fmt.Sprintf("%s://%s", scheme, r.Host)
+	baseURL := a.publicBaseURL(r)
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	err := a.templates["dashboard"].ExecuteTemplate(w, "shares-list", map[string]any{
@@ -468,15 +470,24 @@ func main() {
 
 	app.startCleanupJob()
 
-	mux := http.NewServeMux()
-
-	// Static files
+	// Detect web directory (supports both dev and container layout)
 	staticDir := filepath.Join(webDir, "static")
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
 
-	// Public routes
-	mux.HandleFunc("/", app.handleRoot)
-	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+	// ── Public mux (porta APP_PORT, default 8080) ─────────────────────────────
+	// Espone solo le pagine di download: nessuna autenticazione richiesta.
+	// Questa porta può essere resa pubblica senza ulteriori protezioni.
+	publicMux := http.NewServeMux()
+	publicMux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	publicMux.HandleFunc("/d/", app.handleDownloadPage)
+	publicMux.HandleFunc("/download/", app.handleDownloadFile)
+
+	// ── Admin mux (porta APP_ADMIN_PORT, default 8081) ────────────────────────
+	// Espone login, dashboard e tutte le operazioni autenticate.
+	// Questa porta va tenuta privata (firewall, VPN, reverse proxy con IP allowlist…).
+	adminMux := http.NewServeMux()
+	adminMux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+	adminMux.HandleFunc("/", app.handleRoot)
+	adminMux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			app.handleLoginPage(w, r)
@@ -486,34 +497,42 @@ func main() {
 			http.Error(w, "method not allowed", 405)
 		}
 	})
-	mux.HandleFunc("/logout", app.handleLogout)
-	mux.HandleFunc("/d/", app.handleDownloadPage)
-	mux.HandleFunc("/download/", app.handleDownloadFile)
-
-	// Authenticated routes
-	mux.HandleFunc("/dashboard", app.requireAuth(app.handleDashboard))
-	mux.HandleFunc("/upload", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+	adminMux.HandleFunc("/logout", app.handleLogout)
+	adminMux.HandleFunc("/dashboard", app.requireAuth(app.handleDashboard))
+	adminMux.HandleFunc("/upload", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", 405)
 			return
 		}
 		app.handleUpload(w, r)
 	}))
-	mux.HandleFunc("/share/", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+	adminMux.HandleFunc("/share/", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
 			http.Error(w, "method not allowed", 405)
 			return
 		}
 		app.handleDeleteShare(w, r)
 	}))
-	mux.HandleFunc("/shares-list", app.requireAuth(app.handleSharesList))
+	adminMux.HandleFunc("/shares-list", app.requireAuth(app.handleSharesList))
 
-	addr := ":" + cfg.Port
 	if cfg.LDAPHost == "mock" {
 		log.Printf("⚠️  RUNNING IN MOCK MODE — any credentials accepted")
 	}
-	log.Printf("🚀 GoPulley listening on http://0.0.0.0%s", addr)
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("server: %v", err)
+
+	publicAddr := ":" + cfg.Port
+	adminAddr := ":" + cfg.AdminPort
+	log.Printf("🌐 GoPulley public  (download)  → http://0.0.0.0%s", publicAddr)
+	log.Printf("🔒 GoPulley admin   (dashboard) → http://0.0.0.0%s", adminAddr)
+
+	// Avvia il server pubblico in background
+	go func() {
+		if err := http.ListenAndServe(publicAddr, publicMux); err != nil {
+			log.Fatalf("public server: %v", err)
+		}
+	}()
+
+	// Blocca sul server admin
+	if err := http.ListenAndServe(adminAddr, adminMux); err != nil {
+		log.Fatalf("admin server: %v", err)
 	}
 }
