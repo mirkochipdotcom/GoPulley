@@ -19,6 +19,16 @@ import (
 	"github.com/youorg/gopulley/internal/storage"
 )
 
+// brandLogoSrc risolve il logo aziendale in un URL pronto per src=.
+// Se il valore inizia con http/https viene usato direttamente (URL esterno);
+// altrimenti viene trattato come path relativo alla cartella /static/.
+func brandLogoSrc(logo string) string {
+	if strings.HasPrefix(logo, "http://") || strings.HasPrefix(logo, "https://") {
+		return logo
+	}
+	return "/static/" + logo
+}
+
 // ── App ─────────────────────────────────────────────────────────────────────
 
 // AppVersion is injected at build time via -ldflags "-X main.AppVersion=<ver>"
@@ -37,8 +47,9 @@ const sessionName = "gopulley-session"
 
 func (a *App) loadTemplates(baseDir string) error {
 	funcs := template.FuncMap{
-		"seq":       func(vals ...int) []int { return vals },
-		"humanSize": storage.HumanSize,
+		"seq":          func(vals ...int) []int { return vals },
+		"humanSize":    storage.HumanSize,
+		"brandLogoSrc": brandLogoSrc,
 		"fmtDate": func(t time.Time) string {
 			return t.Format("02 Jan 2006 15:04")
 		},
@@ -132,8 +143,10 @@ func (a *App) handleRoot(w http.ResponseWriter, r *http.Request) {
 // GET /login
 func (a *App) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "login", map[string]any{
-		"MockMode": a.cfg.LDAPHost == "mock",
-		"Version":  AppVersion,
+		"MockMode":  a.cfg.LDAPHost == "mock",
+		"Version":   AppVersion,
+		"BrandName": a.cfg.BrandName,
+		"BrandLogo": a.cfg.BrandLogoPath,
 	})
 }
 
@@ -194,11 +207,13 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 // GET /dashboard
 type dashData struct {
-	Username string
-	Shares   []*database.Share
-	MaxDays  int
-	BaseURL  string
-	Version  string
+	Username  string
+	Shares    []*database.Share
+	MaxDays   int
+	BaseURL   string
+	Version   string
+	BrandName string
+	BrandLogo string
 }
 
 func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -212,11 +227,13 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	baseURL := a.publicBaseURL(r)
 
 	a.render(w, "dashboard", dashData{
-		Username: username,
-		Shares:   shares,
-		MaxDays:  a.cfg.MaxGlobalDays,
-		BaseURL:  baseURL,
-		Version:  AppVersion,
+		Username:  username,
+		Shares:    shares,
+		MaxDays:   a.cfg.MaxGlobalDays,
+		BaseURL:   baseURL,
+		Version:   AppVersion,
+		BrandName: a.cfg.BrandName,
+		BrandLogo: a.cfg.BrandLogoPath,
 	})
 }
 

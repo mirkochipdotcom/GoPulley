@@ -949,4 +949,58 @@ a.version-badge:hover {
     flex-direction: column;
     align-items: flex-start;
   }
+
+  /* Branding: nascondi il nome su schermi piccoli, mostra solo l'icona */
+  .brand-name {
+    display: none;
+  }
+}
+
+/* ── Branding aziendale ────────────────────────────────────────────── */
+
+/* Separatore verticale tra GoPulley e il brand aziendale */
+.brand-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--c-border-2);
+  margin: 0 0.5rem;
+  flex-shrink: 0;
+}
+
+/* Contenitore logo + nome azienda nella navbar e nella login card */
+.brand-logo {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+/* Logo PNG aziendale nella navbar */
+.nav-brand .brand-image {
+  height: 24px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Logo PNG aziendale nella login card (più grande) */
+.auth-logo .brand-image {
+  height: 36px;
+  width: auto;
+  object-fit: contain;
+}
+
+/* Nome testuale dell'azienda */
+.brand-name {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--c-text-2);
+  white-space: nowrap;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Nel login card il nome è leggermente più grande */
+.auth-logo .brand-name {
+  font-size: 1rem;
+  color: var(--c-text);
 }

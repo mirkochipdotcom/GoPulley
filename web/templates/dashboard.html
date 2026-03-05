@@ -19,7 +19,15 @@
                 <img src="/static/img/logo-icon.svg" alt="GoPulley Logo" class="logo-image">
             </div>
             <span class="logo-text">GoPulley</span>
-            <a href="https://github.com/mirkochipdotcom/GoPulley" target="_blank" rel="noopener" class="version-badge">v{{.Version}}</a>
+            <a href="https://github.com/mirkochipdotcom/GoPulley" target="_blank" rel="noopener"
+                class="version-badge">v{{.Version}}</a>
+            {{if .BrandName}}
+            <div class="brand-divider"></div>
+            <div class="brand-logo">
+                {{if .BrandLogo}}<img src="{{brandLogoSrc .BrandLogo}}" alt="{{.BrandName}}" class="brand-image">{{end}}
+                <span class="brand-name">{{.BrandName}}</span>
+            </div>
+            {{end}}
         </div>
         <div class="nav-user">
             <span class="user-chip">
@@ -249,7 +257,7 @@
 
         // ── Upload progress bar ───────────────────────────────────
         const progressWrap = document.getElementById('upload-progress-wrap');
-        const progressBar  = document.getElementById('upload-progress-bar');
+        const progressBar = document.getElementById('upload-progress-bar');
         const progressLabel = document.getElementById('upload-progress-label');
 
         function setProgress(pct) {

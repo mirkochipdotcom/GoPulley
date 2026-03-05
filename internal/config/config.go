@@ -8,8 +8,8 @@ import (
 
 // Config holds all runtime configuration loaded from environment variables.
 type Config struct {
-	Port               string
-	AdminPort          string
+	Port      string
+	AdminPort string
 	// PublicBaseURL è la base URL pubblica usata per generare i link di download
 	// (es. https://files.example.com). Obbligatorio in setup a porte separate.
 	// Se vuoto, viene inferita dall'Host della request.
@@ -23,14 +23,19 @@ type Config struct {
 	LDAPTLSSkipVerify bool
 	// LDAPBindDN + LDAPBindPassword: service account used for group-membership searches.
 	// If empty, the user's own authenticated session is reused.
-	LDAPBindDN         string
-	LDAPBindPassword   string
+	LDAPBindDN       string
+	LDAPBindPassword string
 	// LDAPRequiredGroup: CN of the AD group required to log in (empty = allow all).
-	LDAPRequiredGroup  string
-	MaxGlobalDays      int
-	MaxUploadSizeMB    int64
-	DBPath             string
-	UploadDir          string
+	LDAPRequiredGroup string
+	MaxGlobalDays     int
+	MaxUploadSizeMB   int64
+	DBPath            string
+	UploadDir         string
+	// Branding aziendale opzionale
+	// BrandName: nome dell'ente/azienda da affiancare al logo GoPulley
+	// BrandLogoPath: path relativo a /static/ del logo PNG (es. "img/brand-logo.png")
+	BrandName     string
+	BrandLogoPath string
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -52,6 +57,8 @@ func Load() *Config {
 		MaxUploadSizeMB:    int64(getEnvInt("MAX_UPLOAD_SIZE_MB", 2048)),
 		DBPath:             getEnv("DB_PATH", "./gopulley.db"),
 		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
+		BrandName:          getEnv("BRAND_NAME", ""),
+		BrandLogoPath:      getEnv("BRAND_LOGO", ""),
 	}
 }
 
