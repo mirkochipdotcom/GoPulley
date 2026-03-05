@@ -68,6 +68,20 @@
             </a>
 
             <p class="expires-note">Scade il <strong>{{fmtDate .Share.ExpiresAt}}</strong></p>
+
+            {{if .SHA256}}
+            <div class="sha256-box">
+                <span class="sha256-label">SHA-256</span>
+                <code class="sha256-value" id="sha256-value">{{.SHA256}}</code>
+                <button class="btn-copy-sha256" onclick="copySHA256()" title="Copia SHA-256">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                        stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
+                    </svg>
+                </button>
+            </div>
+            {{end}}
         </div>
         {{end}}
     </div>
@@ -84,6 +98,13 @@
             const n = parseInt(chip.textContent.match(/\d+/) ?? [0]) + 1;
             chip.textContent = '↓ ' + n + ' download';
         });
+
+        // ── Copy SHA-256 ─────────────────────────────────────────────────
+        function copySHA256() {
+            const val = document.getElementById('sha256-value')?.textContent;
+            if (!val) return;
+            navigator.clipboard.writeText(val);
+        }
     </script>
 
 </body>

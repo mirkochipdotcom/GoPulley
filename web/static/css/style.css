@@ -449,6 +449,52 @@ a:hover {
   color: var(--c-text-3);
 }
 
+.sha256-box {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+  padding: 0.6rem 0.8rem;
+  background: var(--c-surface-2, #f3f4f6);
+  border: 1px solid var(--c-border, #e5e7eb);
+  border-radius: 8px;
+  font-size: 0.75rem;
+  word-break: break-all;
+  text-align: left;
+}
+
+.sha256-label {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: var(--c-text-2, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.7rem;
+}
+
+.sha256-value {
+  flex: 1;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  color: var(--c-text-1, #374151);
+  font-size: 0.72rem;
+  overflow-wrap: anywhere;
+}
+
+.btn-copy-sha256 {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--c-text-3, #9ca3af);
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.btn-copy-sha256:hover {
+  color: var(--c-primary, #6366f1);
+}
+
 .error-state h2 {
   color: var(--c-danger);
   margin-bottom: 0.5rem;

@@ -316,10 +316,21 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var sha256Hash string
+	if a.cfg.EnableSHA256 {
+		sha256Hash, err = storage.ComputeSHA256(filePath)
+		if err != nil {
+			log.Printf("compute sha256: %v", err)
+			storage.DeleteFile(filePath)
+			http.Error(w, "errore calcolo checksum", 500)
+			return
+		}
+	}
+
 	token := uuid.New().String()
 	expiresAt := time.Now().UTC().Add(time.Duration(days) * 24 * time.Hour)
 
-	share, err := a.db.CreateShare(token, filePath, originalName, sizeBytes, username, expiresAt)
+	share, err := a.db.CreateShare(token, filePath, originalName, sizeBytes, username, expiresAt, sha256Hash)
 	if err != nil {
 		log.Printf("create share: %v", err)
 		storage.DeleteFile(filePath)
@@ -422,6 +433,7 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 		Expired   bool
 		Error     string
 		HumanSz   string
+		SHA256    string
 		Version   string
 		BrandName string
 		BrandLogo string
@@ -445,6 +457,7 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 
 	data.Share = share
 	data.HumanSz = storage.HumanSize(share.SizeBytes)
+	data.SHA256 = share.SHA256
 	if time.Now().After(share.ExpiresAt) {
 		data.Expired = true
 	}
