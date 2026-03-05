@@ -26,7 +26,17 @@ func brandLogoSrc(logo string) string {
 	if strings.HasPrefix(logo, "http://") || strings.HasPrefix(logo, "https://") {
 		return logo
 	}
-	return "/static/" + logo
+	return "/brand-logo"
+}
+
+func (a *App) handleBrandLogo(w http.ResponseWriter, r *http.Request) {
+	if a.cfg.BrandLogoPath == "" {
+		http.Error(w, "not found", 404)
+		return
+	}
+	// Il logo è in /data (es. /data/my-logo.png)
+	logoPath := filepath.Join(filepath.Dir(a.cfg.DBPath), a.cfg.BrandLogoPath)
+	http.ServeFile(w, r, logoPath)
 }
 
 // ── App ─────────────────────────────────────────────────────────────────────
@@ -490,21 +500,22 @@ func main() {
 	// Detect web directory (supports both dev and container layout)
 	staticDir := filepath.Join(webDir, "static")
 
-	// ── Public mux (porta APP_PORT, default 8080) ─────────────────────────────
-	// Espone solo le pagine di download: nessuna autenticazione richiesta.
-	// Questa porta può essere resa pubblica senza ulteriori protezioni.
-	publicMux := http.NewServeMux()
-	publicMux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-	publicMux.HandleFunc("/d/", app.handleDownloadPage)
-	publicMux.HandleFunc("/download/", app.handleDownloadFile)
+	// ── Unified mux (porta APP_PORT, default 8080) ─────────────────────────────
+	mux := http.NewServeMux()
 
-	// ── Admin mux (porta APP_ADMIN_PORT, default 8081) ────────────────────────
-	// Espone login, dashboard e tutte le operazioni autenticate.
-	// Questa porta va tenuta privata (firewall, VPN, reverse proxy con IP allowlist…).
-	adminMux := http.NewServeMux()
-	adminMux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
-	adminMux.HandleFunc("/", app.handleRoot)
-	adminMux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+	// Static files
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticDir))))
+
+	// Corporate Branding Logo (served from /data)
+	mux.HandleFunc("/brand-logo", app.handleBrandLogo)
+
+	// Public routes (Download)
+	mux.HandleFunc("/d/", app.handleDownloadPage)
+	mux.HandleFunc("/download/", app.handleDownloadFile)
+
+	// Admin/Authenticated routes
+	mux.HandleFunc("/", app.handleRoot)
+	mux.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodGet:
 			app.handleLoginPage(w, r)
@@ -514,42 +525,32 @@ func main() {
 			http.Error(w, "method not allowed", 405)
 		}
 	})
-	adminMux.HandleFunc("/logout", app.handleLogout)
-	adminMux.HandleFunc("/dashboard", app.requireAuth(app.handleDashboard))
-	adminMux.HandleFunc("/upload", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/logout", app.handleLogout)
+	mux.HandleFunc("/dashboard", app.requireAuth(app.handleDashboard))
+	mux.HandleFunc("/upload", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", 405)
 			return
 		}
 		app.handleUpload(w, r)
 	}))
-	adminMux.HandleFunc("/share/", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("/share/", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodDelete {
 			http.Error(w, "method not allowed", 405)
 			return
 		}
 		app.handleDeleteShare(w, r)
 	}))
-	adminMux.HandleFunc("/shares-list", app.requireAuth(app.handleSharesList))
+	mux.HandleFunc("/shares-list", app.requireAuth(app.handleSharesList))
 
 	if cfg.LDAPHost == "mock" {
 		log.Printf("⚠️  RUNNING IN MOCK MODE — any credentials accepted")
 	}
 
-	publicAddr := ":" + cfg.Port
-	adminAddr := ":" + cfg.AdminPort
-	log.Printf("🌐 GoPulley public  (download)  → http://0.0.0.0%s", publicAddr)
-	log.Printf("🔒 GoPulley admin   (dashboard) → http://0.0.0.0%s", adminAddr)
+	addr := ":" + cfg.Port
+	log.Printf("🌐 GoPulley started on http://0.0.0.0%s", addr)
 
-	// Avvia il server pubblico in background
-	go func() {
-		if err := http.ListenAndServe(publicAddr, publicMux); err != nil {
-			log.Fatalf("public server: %v", err)
-		}
-	}()
-
-	// Blocca sul server admin
-	if err := http.ListenAndServe(adminAddr, adminMux); err != nil {
-		log.Fatalf("admin server: %v", err)
+	if err := http.ListenAndServe(addr, mux); err != nil {
+		log.Fatalf("server: %v", err)
 	}
 }

@@ -8,8 +8,7 @@ import (
 
 // Config holds all runtime configuration loaded from environment variables.
 type Config struct {
-	Port      string
-	AdminPort string
+	Port string
 	// PublicBaseURL è la base URL pubblica usata per generare i link di download
 	// (es. https://files.example.com). Obbligatorio in setup a porte separate.
 	// Se vuoto, viene inferita dall'Host della request.
@@ -43,7 +42,6 @@ type Config struct {
 func Load() *Config {
 	return &Config{
 		Port:               getEnv("APP_PORT", "8080"),
-		AdminPort:          getEnv("APP_ADMIN_PORT", "8081"),
 		PublicBaseURL:      getEnv("PUBLIC_BASE_URL", ""),
 		SessionSecret:      getEnv("SESSION_SECRET", "please-change-me"),
 		LDAPHost:           getEnv("LDAP_HOST", "mock"),

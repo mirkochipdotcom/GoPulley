@@ -13,8 +13,7 @@ services:
     container_name: gopulley
     restart: unless-stopped
     ports:
-      - "8080:8080"   # porta pubblica (download)
-      - "8081:8081"   # porta admin (dashboard/login) — limitare accesso via firewall/VPN
+      - "8080:8080" # porta unica (download + admin)
     env_file:
       - .env
     volumes:
