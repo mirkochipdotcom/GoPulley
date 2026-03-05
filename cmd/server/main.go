@@ -550,11 +550,11 @@ func main() {
 	mux.HandleFunc("/shares-list", app.requireAuth(app.handleSharesList))
 
 	if cfg.LDAPHost == "mock" {
-		log.Printf("⚠️  RUNNING IN MOCK MODE — any credentials accepted")
+		log.Printf("[WARN] RUNNING IN MOCK MODE - any credentials accepted")
 	}
 
 	addr := ":" + cfg.Port
-	log.Printf("🌐 GoPulley started on http://0.0.0.0%s", addr)
+	log.Printf("GoPulley started on http://0.0.0.0%s", addr)
 
 	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("server: %v", err)
