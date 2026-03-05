@@ -123,7 +123,7 @@
         <section class="shares-section">
             <div class="section-header">
                 <h2 class="section-title">Le tue condivisioni</h2>
-                <span class="shares-count">{{len .Shares}} attive</span>
+                <span class="shares-count" id="shares-count">{{len .Shares}} attive</span>
             </div>
 
             <div id="shares-list" hx-get="/shares-list" hx-trigger="refresh" hx-swap="innerHTML">
@@ -285,6 +285,15 @@
             // Refresh lista dopo eliminazione
             if (e.detail.requestConfig && e.detail.requestConfig.verb === 'delete') {
                 htmx.trigger('#shares-list', 'refresh');
+            }
+        });
+
+        // Aggiorna il contatore dopo ogni refresh HTMX della lista
+        document.body.addEventListener('htmx:afterSettle', function (e) {
+            if (e.detail.elt && e.detail.elt.id === 'shares-list') {
+                const rows = document.querySelectorAll('#shares-list tbody tr');
+                const badge = document.getElementById('shares-count');
+                if (badge) badge.textContent = rows.length + ' attive';
             }
         });
     </script>

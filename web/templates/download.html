@@ -52,7 +52,7 @@
             <h2 class="filename">{{.Share.OriginalName}}</h2>
             <div class="file-meta">
                 <span class="meta-chip">{{.HumanSz}}</span>
-                <span class="meta-chip">{{daysLeft .Share.ExpiresAt}}</span>
+                <span class="meta-chip">⏳ Scade {{daysLeft .Share.ExpiresAt}}</span>
                 <span class="meta-chip">↓ {{.Share.Downloaded}} download</span>
             </div>
             <p class="text-muted">Condiviso da <strong>{{.Share.Uploader}}</strong></p>
