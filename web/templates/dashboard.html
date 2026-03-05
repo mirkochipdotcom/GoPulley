@@ -45,7 +45,7 @@
                 hx-encoding="multipart/form-data" hx-indicator="#upload-spinner" enctype="multipart/form-data">
 
                 <!-- Drag & Drop zone -->
-                <div class="dropzone" id="dropzone" onclick="openFilePicker()"
+                <div class="dropzone" id="dropzone" onclick="openFilePicker(event)"
                     ondragover="event.preventDefault(); this.classList.add('dragover')"
                     ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event)">
                     <div class="dropzone-inner">
@@ -156,7 +156,9 @@
             e.stopPropagation();
         });
 
-        function openFilePicker() {
+        function openFilePicker(e) {
+            // Ignora click sintetici: evita rientro quando viene chiamato fileInput.click().
+            if (e && !e.isTrusted) return;
             if (pickerOpen) return;   // guard anti-rientro
             showDropLoading();
             pickerOpen = true;
