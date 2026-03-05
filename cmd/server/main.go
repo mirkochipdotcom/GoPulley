@@ -34,6 +34,9 @@ func (a *App) handleBrandLogo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", 404)
 		return
 	}
+	// Forza il browser a rivalidare sempre il logo (evita caching quando il file cambia).
+	// http.ServeFile gestisce ETag/304, quindi non c'è overhead se il file non è cambiato.
+	w.Header().Set("Cache-Control", "no-cache")
 	// Il logo è in /data (es. /data/my-logo.png)
 	logoPath := filepath.Join(filepath.Dir(a.cfg.DBPath), a.cfg.BrandLogoPath)
 	http.ServeFile(w, r, logoPath)
