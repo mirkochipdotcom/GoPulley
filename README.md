@@ -12,7 +12,7 @@
 [![HTMX](https://img.shields.io/badge/HTMX-2.0-3D72D7?logo=html5)](https://htmx.org)
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite)](https://sqlite.org)
 [![Docker](https://img.shields.io/badge/Docker-alpine-2496ED?logo=docker)](https://docker.com)
-[![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-%20%20GNU%20AGPLv3%20-green)](LICENSE)
 [![Container](https://img.shields.io/badge/ghcr.io-gopulley-7c3aed?logo=github)](https://github.com/mirkochipdotcom/GoPulley/pkgs/container/gopulley)
 
 </div>
@@ -340,4 +340,4 @@ CREATE TABLE shares (
 
 ## Licenza
 
-GNU GPLv3 — vedi [LICENSE](LICENSE)
+GNU AGPLv3 — vedi [LICENSE](LICENSE)
