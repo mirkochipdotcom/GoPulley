@@ -28,9 +28,9 @@ RUN VERSION=$(cat /build/VERSION | tr -d '[:space:]') && \
 FROM alpine:3.19
 
 RUN apk add --no-cache ca-certificates tzdata \
-  && adduser -D -u 1001 weshare \
+  && adduser -D -u 1001 gopulley \
   && mkdir -p /data/uploads \
-  && chown -R weshare:weshare /data
+  && chown -R gopulley:gopulley /data
 
 WORKDIR /app
 
@@ -38,14 +38,14 @@ WORKDIR /app
 COPY --from=builder /build/we-share .
 
 # Copy web assets (templates + static files)
-COPY --chown=weshare:weshare web/ ./web/
+COPY --chown=gopulley:gopulley web/ ./web/
 
 # Data volumes: SQLite DB and uploaded files
 # Mount these as Docker/Podman volumes in production
 VOLUME ["/data"]
 
 # Run as non-root
-USER weshare
+USER gopulley
 
 EXPOSE 8080
 

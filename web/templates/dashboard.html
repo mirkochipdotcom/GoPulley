@@ -150,7 +150,14 @@
         // il listener sul focus della window.
         let pickerOpen = false;
 
+        // Impedisce che il click sintetico su file-input faccia bubbling
+        // al dropzone (che chiamerebbe openFilePicker() ricorsivamente).
+        document.getElementById('file-input').addEventListener('click', function (e) {
+            e.stopPropagation();
+        });
+
         function openFilePicker() {
+            if (pickerOpen) return;   // guard anti-rientro
             showDropLoading();
             pickerOpen = true;
             document.getElementById('file-input').click();
