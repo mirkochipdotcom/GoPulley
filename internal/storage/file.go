@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -41,6 +43,21 @@ func SaveFile(header *multipart.FileHeader, uploadDir string) (filePath, origina
 	}
 
 	return filePath, originalName, sizeBytes, nil
+}
+
+// ComputeSHA256 computes the SHA-256 hex digest of the file at the given path.
+func ComputeSHA256(filePath string) (string, error) {
+	f, err := os.Open(filePath)
+	if err != nil {
+		return "", fmt.Errorf("open file for sha256: %w", err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return "", fmt.Errorf("compute sha256: %w", err)
+	}
+	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
 // DeleteFile removes the file and its containing directory.

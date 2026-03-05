@@ -35,6 +35,9 @@ type Config struct {
 	// BrandLogoPath: path relativo a /static/ del logo PNG (es. "img/brand-logo.png")
 	BrandName     string
 	BrandLogoPath string
+	// EnableSHA256: se true, calcola e memorizza lo SHA-256 di ogni file caricato
+	// e lo mostra nella pagina di download.
+	EnableSHA256 bool
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -57,6 +60,7 @@ func Load() *Config {
 		UploadDir:          getEnv("UPLOAD_DIR", "./uploads"),
 		BrandName:          getEnv("BRAND_NAME", ""),
 		BrandLogoPath:      getEnv("BRAND_LOGO", ""),
+		EnableSHA256:       getEnvBool("ENABLE_SHA256", false),
 	}
 }
 
