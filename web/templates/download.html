@@ -47,7 +47,7 @@
         {{else}}
         <div class="dl-state ready-state">
             <div class="file-icon-wrap">
-                <div class="file-icon">📄</div>
+                <div class="file-icon">{{fileIcon .Share.OriginalName}}</div>
             </div>
             <h2 class="filename">{{.Share.OriginalName}}</h2>
             <div class="file-meta">
@@ -77,6 +77,7 @@
     </div>
 
     <script>
+        // ── Download counter ─────────────────────────────────────────────
         document.getElementById('dl-btn')?.addEventListener('click', function () {
             const chip = document.getElementById('dl-count');
             if (!chip) return;

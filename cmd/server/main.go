@@ -55,11 +55,40 @@ const sessionName = "gopulley-session"
 
 // ── Template helpers ─────────────────────────────────────────────────────────
 
+func fileIcon(filename string) string {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filename), "."))
+	switch ext {
+	case "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico":
+		return "🖼️"
+	case "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm":
+		return "🎬"
+	case "mp3", "wav", "flac", "ogg", "aac", "m4a":
+		return "🎵"
+	case "zip", "rar", "7z", "tar", "gz", "bz2":
+		return "🗜️"
+	case "pdf":
+		return "📕"
+	case "doc", "docx", "odt", "rtf":
+		return "📝"
+	case "xls", "xlsx", "ods", "csv":
+		return "📊"
+	case "ppt", "pptx", "odp":
+		return "📑"
+	case "txt", "md", "log":
+		return "📄"
+	case "js", "ts", "go", "py", "java", "c", "cpp", "cs", "rb", "php", "rs", "sh", "sql", "html", "css", "json", "xml", "yaml", "yml":
+		return "💻"
+	default:
+		return "📄"
+	}
+}
+
 func (a *App) loadTemplates(baseDir string) error {
 	funcs := template.FuncMap{
 		"seq":          func(vals ...int) []int { return vals },
 		"humanSize":    storage.HumanSize,
 		"brandLogoSrc": brandLogoSrc,
+		"fileIcon":     fileIcon,
 		"fmtDate": func(t time.Time) string {
 			return t.Format("02 Jan 2006 15:04")
 		},

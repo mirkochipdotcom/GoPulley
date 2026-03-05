@@ -326,7 +326,7 @@
             {{range .Shares}}
             <tr id="share-{{.Token}}">
                 <td class="td-filename">
-                    <span class="file-icon-sm">📄</span>
+                    <span class="file-icon-sm">{{fileIcon .OriginalName}}</span>
                     {{.OriginalName}}
                 </td>
                 <td>{{humanSize .SizeBytes}}</td>
