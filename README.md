@@ -332,7 +332,7 @@ CREATE TABLE shares (
 - I cookie di sessione usano HMAC-SHA256 (`gorilla/securecookie`) — il `SESSION_SECRET` deve essere lungo almeno 32 byte random
 - Tutte le condivisioni sono verificate per ownership prima dell'eliminazione (403 altrimenti)
 - File caricati salvati in directory UUID isolate — nessuna collisione di nomi possibile
-- Il container gira come utente non-root `weshare` (uid 1001)
+- Il container gira come utente non-root `gopulley` (uid 1001)
 - Nessuna shell nel container finale (alpine minimo)
 - Il `.env` è escluso dal repository via `.gitignore`
 
