@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - '*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag versione da pubblicare (es. 0.9.6)'
+        required: false
+        default: 'latest'
 
 env:
   REGISTRY: ghcr.io
