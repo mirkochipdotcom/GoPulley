@@ -1,5 +1,5 @@
 # ── Stage 1: Builder ────────────────────────────────────────────────────────
-FROM golang:1.22-alpine AS builder
+FROM golang:1.22-alpine3.19 AS builder
 
 # gcc + musl-dev needed for go-sqlite3 (CGO)
 RUN apk add --no-cache gcc musl-dev
@@ -20,7 +20,7 @@ RUN VERSION=$(cat /build/VERSION | tr -d '[:space:]') && \
   go build \
   -ldflags="-s -w -extldflags '-static' -X main.AppVersion=${VERSION}" \
   -trimpath \
-  -o we-share \
+  -o gopulley \
   ./cmd/server
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
@@ -35,7 +35,7 @@ RUN apk add --no-cache ca-certificates tzdata \
 WORKDIR /app
 
 # Copy compiled binary
-COPY --from=builder /build/we-share .
+COPY --from=builder /build/gopulley .
 
 # Copy web assets (templates + static files)
 COPY --chown=gopulley:gopulley web/ ./web/
@@ -49,4 +49,4 @@ USER gopulley
 
 EXPOSE 8080
 
-ENTRYPOINT ["/app/we-share"]
+ENTRYPOINT ["/app/gopulley"]
