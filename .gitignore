@@ -4,7 +4,6 @@
 .env
 
 # Binario compilato
-we-share
 gopulley
 *.exe
 
