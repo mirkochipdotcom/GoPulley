@@ -39,6 +39,7 @@ Tutto gira in un **singolo container** leggero (~25 MB), senza dipendenze estern
 | 🗑️ **Pulizia automatica** | Goroutine elimina file e record scaduti ogni ora |
 | 🐳 **Single container** | Multi-stage Docker/Podman, immagine finale ~25 MB |
 | 🌙 **Dark mode** | UI moderna, glassmorphism, Inter font, zero npm |
+| 🧾 **SHA-256 opzionale** | Calcola e memorizza lo SHA-256 dei file caricati e lo mostra nella pagina di download per verificare l'integrità; attivabile via `ENABLE_SHA256=true` |
 
 ---
 
@@ -171,6 +172,7 @@ cp .env.example .env
 | `DB_PATH` | ⬜ | `/data/gopulley.db` | Percorso database SQLite |
 | `UPLOAD_DIR` | ⬜ | `/data/uploads` | Cartella per i file caricati |
 | `APP_PORT` | ⬜ | `8080` | Porta HTTP del server |
+| `ENABLE_SHA256` | ⬜ | `false` | Se `true`, calcola e memorizza lo SHA-256 di ogni file caricato e lo mostra nella pagina di download per consentire la verifica dell'integrità del file. |
 
 ### Configurazione LDAP / Active Directory
 
