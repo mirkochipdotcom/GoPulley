@@ -384,6 +384,51 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
+// POST /share/{token}/compute-sha256 — compute SHA-256 for legacy/missing hashes
+func (a *App) handleComputeShareSHA256(w http.ResponseWriter, r *http.Request, token string) {
+	username := a.getUsername(r)
+
+	share, err := a.db.GetShareByToken(token)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, "not found", 404)
+			return
+		}
+		http.Error(w, "errore database", 500)
+		return
+	}
+	if share.Uploader != username {
+		http.Error(w, "forbidden", 403)
+		return
+	}
+
+	// If hash already exists, just return the row
+	if share.SHA256 != "" {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		fmt.Fprintf(w, `<p class="sha-chip">Copia SHA-256: <code>%s</code></p>`, template.HTMLEscapeString(share.SHA256))
+		return
+	}
+
+	// Compute hash asynchronously and return pending state
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<span class="badge badge-pending" data-sha256-pending="true">In lavorazione</span>
+<script>
+  setTimeout(() => { htmx.trigger('#share-%s', 'refresh'); }, 2500);
+</script>`, template.HTMLEscapeString(token))
+
+	// Trigger async computation
+	go func(token, path string) {
+		hash, err := storage.ComputeSHA256(path)
+		if err != nil {
+			log.Printf("compute sha256 on-demand (%s): %v", token, err)
+			return
+		}
+		if err := a.db.SetShareSHA256(token, hash); err != nil {
+			log.Printf("store sha256 on-demand (%s): %v", token, err)
+		}
+	}(share.Token, share.FilePath)
+}
+
 // DELETE /share/{token}
 func (a *App) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
@@ -596,11 +641,23 @@ func main() {
 		app.handleUpload(w, r)
 	}))
 	mux.HandleFunc("/share/", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete {
-			http.Error(w, "method not allowed", 405)
+		path := strings.TrimPrefix(r.URL.Path, "/share/")
+		parts := strings.Split(path, "/")
+		token := parts[0]
+
+		// POST /share/{token}/compute-sha256
+		if len(parts) > 1 && parts[1] == "compute-sha256" && r.Method == http.MethodPost {
+			app.handleComputeShareSHA256(w, r, token)
 			return
 		}
-		app.handleDeleteShare(w, r)
+
+		// DELETE /share/{token}
+		if r.Method == http.MethodDelete {
+			app.handleDeleteShare(w, r)
+			return
+		}
+
+		http.Error(w, "method not allowed", 405)
 	}))
 	mux.HandleFunc("/shares-list", app.requireAuth(app.handleSharesList))
 

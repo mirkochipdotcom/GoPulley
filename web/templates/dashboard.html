@@ -238,21 +238,6 @@
             navigator.clipboard.writeText(value).then(() => showToast('SHA-256 copiato negli appunti!'));
         }
 
-        let shaPendingRefreshTimer = null;
-        function schedulePendingSHA256Refresh() {
-            if (shaPendingRefreshTimer) {
-                clearTimeout(shaPendingRefreshTimer);
-                shaPendingRefreshTimer = null;
-            }
-
-            const hasPending = document.querySelector('[data-sha256-pending="true"]');
-            if (!hasPending) return;
-
-            shaPendingRefreshTimer = setTimeout(() => {
-                htmx.trigger('#shares-list', 'refresh');
-            }, 2500);
-        }
-
         // ── Toast ────────────────────────────────────────────────
         function showToast(msg) {
             const t = document.getElementById('toast');
@@ -314,12 +299,11 @@
                 const rows = document.querySelectorAll('#shares-list tbody tr');
                 const badge = document.getElementById('shares-count');
                 if (badge) badge.textContent = rows.length + ' attive';
-                schedulePendingSHA256Refresh();
             }
         });
 
         document.addEventListener('DOMContentLoaded', function () {
-            schedulePendingSHA256Refresh();
+            // No pending refresh needed with new compact UI
         });
     </script>
 </body>
@@ -344,7 +328,6 @@
                 <th>Scadenza</th>
                 <th>Download</th>
                 <th>Link</th>
-                <th>SHA-256</th>
                 <th></th>
             </tr>
         </thead>
@@ -374,24 +357,23 @@
                     {{end}}
                 </td>
                 <td>
-                    {{if $.EnableSHA}}
-                    {{if .SHA256}}
-                    <div class="sha-inline">
-                        <code class="sha-inline-value">{{.SHA256}}</code>
-                        <button class="btn btn-xs btn-ghost" onclick="copyShareSHA256('{{.SHA256}}')">Copia</button>
+                    <div class="share-actions">
+                        {{if $.EnableSHA}}
+                        {{if .SHA256}}
+                        <button class="btn btn-xs btn-ghost" onclick="copyShareSHA256('{{.SHA256}}')" title="{{.SHA256}}">
+                            📋 SHA-256
+                        </button>
+                        {{else}}
+                        <button class="btn btn-xs btn-secondary" hx-post="/share/{{.Token}}/compute-sha256" hx-target="this" hx-swap="outerHTML">
+                            Calcola
+                        </button>
+                        {{end}}
+                        {{end}}
+                        <button class="btn btn-xs btn-danger" hx-delete="/share/{{.Token}}" hx-target="#share-{{.Token}}"
+                            hx-swap="outerHTML swap:0.3s" hx-confirm="Eliminare questa condivisione?">
+                            Elimina
+                        </button>
                     </div>
-                    {{else}}
-                    <span class="badge badge-pending" data-sha256-pending="true">In lavorazione</span>
-                    {{end}}
-                    {{else}}
-                    <span class="text-muted">—</span>
-                    {{end}}
-                </td>
-                <td>
-                    <button class="btn btn-xs btn-danger" hx-delete="/share/{{.Token}}" hx-target="#share-{{.Token}}"
-                        hx-swap="outerHTML swap:0.3s" hx-confirm="Eliminare questa condivisione?">
-                        Elimina
-                    </button>
                 </td>
             </tr>
             {{end}}
