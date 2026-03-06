@@ -894,6 +894,34 @@ a:hover {
   border: 1px solid rgba(239, 68, 68, 0.25);
 }
 
+.badge-pending {
+  background: rgba(245, 158, 11, 0.14);
+  color: var(--c-warn);
+  border: 1px solid rgba(245, 158, 11, 0.28);
+}
+
+.sha-inline {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sha-inline-value {
+  max-width: 170px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.72rem;
+  color: var(--c-text-2);
+}
+
+.sha-pending-note {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  color: var(--c-text-2);
+}
+
 /* Version tags */
 .version-tag {
   position: absolute;

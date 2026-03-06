@@ -233,6 +233,26 @@
             navigator.clipboard.writeText(url).then(() => showToast('Link copiato negli appunti!'));
         }
 
+        function copyShareSHA256(value) {
+            if (!value) return;
+            navigator.clipboard.writeText(value).then(() => showToast('SHA-256 copiato negli appunti!'));
+        }
+
+        let shaPendingRefreshTimer = null;
+        function schedulePendingSHA256Refresh() {
+            if (shaPendingRefreshTimer) {
+                clearTimeout(shaPendingRefreshTimer);
+                shaPendingRefreshTimer = null;
+            }
+
+            const hasPending = document.querySelector('[data-sha256-pending="true"]');
+            if (!hasPending) return;
+
+            shaPendingRefreshTimer = setTimeout(() => {
+                htmx.trigger('#shares-list', 'refresh');
+            }, 2500);
+        }
+
         // ── Toast ────────────────────────────────────────────────
         function showToast(msg) {
             const t = document.getElementById('toast');
@@ -294,7 +314,12 @@
                 const rows = document.querySelectorAll('#shares-list tbody tr');
                 const badge = document.getElementById('shares-count');
                 if (badge) badge.textContent = rows.length + ' attive';
+                schedulePendingSHA256Refresh();
             }
+        });
+
+        document.addEventListener('DOMContentLoaded', function () {
+            schedulePendingSHA256Refresh();
         });
     </script>
 </body>
@@ -319,6 +344,7 @@
                 <th>Scadenza</th>
                 <th>Download</th>
                 <th>Link</th>
+                <th>SHA-256</th>
                 <th></th>
             </tr>
         </thead>
@@ -343,6 +369,20 @@
                     <button class="btn btn-xs btn-ghost" onclick="copyShareLink('{{$.BaseURL}}/d/{{.Token}}')">
                         Copia link
                     </button>
+                    {{else}}
+                    <span class="text-muted">—</span>
+                    {{end}}
+                </td>
+                <td>
+                    {{if $.EnableSHA}}
+                    {{if .SHA256}}
+                    <div class="sha-inline">
+                        <code class="sha-inline-value">{{.SHA256}}</code>
+                        <button class="btn btn-xs btn-ghost" onclick="copyShareSHA256('{{.SHA256}}')">Copia</button>
+                    </div>
+                    {{else}}
+                    <span class="badge badge-pending" data-sha256-pending="true">In lavorazione</span>
+                    {{end}}
                     {{else}}
                     <span class="text-muted">—</span>
                     {{end}}

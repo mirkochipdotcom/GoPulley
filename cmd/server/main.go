@@ -248,6 +248,7 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 type dashData struct {
 	Username  string
 	Shares    []*database.Share
+	EnableSHA bool
 	MaxDays   int
 	BaseURL   string
 	Version   string
@@ -268,6 +269,7 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	a.render(w, "dashboard", dashData{
 		Username:  username,
 		Shares:    shares,
+		EnableSHA: a.cfg.EnableSHA256,
 		MaxDays:   a.cfg.MaxGlobalDays,
 		BaseURL:   baseURL,
 		Version:   AppVersion,
@@ -316,26 +318,29 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var sha256Hash string
-	if a.cfg.EnableSHA256 {
-		sha256Hash, err = storage.ComputeSHA256(filePath)
-		if err != nil {
-			log.Printf("compute sha256: %v", err)
-			storage.DeleteFile(filePath)
-			http.Error(w, "errore calcolo checksum", 500)
-			return
-		}
-	}
-
 	token := uuid.New().String()
 	expiresAt := time.Now().UTC().Add(time.Duration(days) * 24 * time.Hour)
 
-	share, err := a.db.CreateShare(token, filePath, originalName, sizeBytes, username, expiresAt, sha256Hash)
+	share, err := a.db.CreateShare(token, filePath, originalName, sizeBytes, username, expiresAt, "")
 	if err != nil {
 		log.Printf("create share: %v", err)
 		storage.DeleteFile(filePath)
 		http.Error(w, "errore database", 500)
 		return
+	}
+
+	if a.cfg.EnableSHA256 {
+		// Compute hash asynchronously to avoid blocking the upload response on large files.
+		go func(token, path string) {
+			hash, err := storage.ComputeSHA256(path)
+			if err != nil {
+				log.Printf("compute sha256 async (%s): %v", token, err)
+				return
+			}
+			if err := a.db.SetShareSHA256(token, hash); err != nil {
+				log.Printf("store sha256 async (%s): %v", token, err)
+			}
+		}(share.Token, filePath)
 	}
 
 	downloadURL := fmt.Sprintf("%s/d/%s", a.publicBaseURL(r), share.Token)
@@ -355,6 +360,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
     <input type="text" value="%s" readonly id="share-link" />
     <button class="btn btn-copy" onclick="copyLink()">Copia link</button>
   </div>
+	%s
 </div>
 
 <script>
@@ -369,6 +375,12 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		storage.HumanSize(sizeBytes),
 		days,
 		template.HTMLEscapeString(downloadURL),
+		func() string {
+			if !a.cfg.EnableSHA256 {
+				return ""
+			}
+			return `<p class="sha-pending-note">SHA-256 in lavorazione: comparira nella dashboard appena pronto.</p>`
+		}(),
 	)
 }
 
@@ -415,8 +427,9 @@ func (a *App) handleSharesList(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	err := a.templates["dashboard"].ExecuteTemplate(w, "shares-list", map[string]any{
-		"Shares":  shares,
-		"BaseURL": baseURL,
+		"Shares":    shares,
+		"BaseURL":   baseURL,
+		"EnableSHA": a.cfg.EnableSHA256,
 	})
 	if err != nil {
 		log.Printf("render shares-list: %v", err)

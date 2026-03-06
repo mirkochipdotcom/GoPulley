@@ -159,6 +159,15 @@ func (db *DB) IncrementDownload(token string) {
 	db.conn.Exec(`UPDATE shares SET downloaded = downloaded + 1 WHERE token = ?`, token)
 }
 
+// SetShareSHA256 stores the computed SHA-256 digest for the given share token.
+func (db *DB) SetShareSHA256(token, sha256 string) error {
+	_, err := db.conn.Exec(`UPDATE shares SET sha256 = ? WHERE token = ?`, sha256, token)
+	if err != nil {
+		return fmt.Errorf("update share sha256: %w", err)
+	}
+	return nil
+}
+
 // ── Scan helpers ────────────────────────────────────────────────────────────
 
 type scanner interface {
