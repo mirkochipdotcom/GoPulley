@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GoPulley — Admin Dashboard</title>
+    <title>GoPulley — {{t "admin.page_title"}}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css" />
@@ -19,8 +19,8 @@
             <div class="logo-icon logo-icon--sm">
                 <img src="/static/img/logo-icon.svg" alt="GoPulley Logo" class="logo-image">
             </div>
-            <span class="logo-text">GoPulley <span
-                    style="color: var(--c-accent); margin-left: 0.5rem; font-size: 0.8em; text-transform: uppercase;">Admin</span></span>
+                <span class="logo-text">GoPulley <span
+                    style="color: var(--c-accent); margin-left: 0.5rem; font-size: 0.8em; text-transform: uppercase;">{{t "admin.badge"}}</span></span>
             <a href="https://github.com/mirkochipdotcom/GoPulley" target="_blank" rel="noopener"
                 class="version-badge">v{{.Version}}</a>
             {{if .BrandName}}
@@ -32,9 +32,7 @@
             {{end}}
         </div>
         <div class="nav-user">
-            <a href="/dashboard" class="btn btn-ghost" style="margin-right: 0.5rem;">
-                Torna a I miei file
-            </a>
+            <a href="/dashboard" class="btn btn-ghost" style="margin-right: 0.5rem;">{{t "admin.back_my_files"}}</a>
             <span class="user-chip">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
@@ -43,7 +41,7 @@
                 {{.Username}}
             </span>
             <form method="POST" action="/logout" style="margin:0">
-                <button type="submit" class="btn btn-ghost" title="Disconnetti" aria-label="Disconnetti">
+                <button type="submit" class="btn btn-ghost" title="{{t "nav.signout"}}" aria-label="{{t "nav.signout"}}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -60,13 +58,13 @@
         <section>
             <div class="section-header"
                 style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;">
-                <h2 class="section-title" style="margin-bottom: 0;">Archivio Globale File</h2>
+                <h2 class="section-title" style="margin-bottom: 0;">{{t "admin.title"}}</h2>
 
                 <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     {{if gt .TotalSpace 0}}
                     <div class="quota-wrap"
                         style="display: flex; align-items: center; gap: 0.5rem; background: rgba(255, 255, 255, 0.05); padding: 0.4rem 0.8rem; border-radius: 99px; border: 1px solid var(--c-border-2);">
-                        <span style="font-size: 0.75rem; color: var(--c-text-2);">Disco (/data): <strong>{{humanSize
+                        <span style="font-size: 0.75rem; color: var(--c-text-2);">{{t "admin.disk_usage"}} <strong>{{humanSize
                                 .UsedSpace}}</strong> / {{humanSize .TotalSpace}}</span>
                         <div
                             style="width: 60px; height: 6px; background: rgba(0,0,0,0.3); border-radius: 99px; overflow: hidden;">
@@ -76,7 +74,7 @@
                     </div>
                     {{end}}
 
-                    <span class="shares-count" style="margin-top: 0;">{{len .Files}} file totali</span>
+                    <span class="shares-count" style="margin-top: 0;">{{t "admin.total_files" (len .Files)}}</span>
                 </div>
             </div>
 
@@ -89,26 +87,26 @@
                         <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path>
                     </svg>
                 </span>
-                <p style="color: var(--c-text-2); margin-top: 1rem;">Nessun file caricato attualmente nel sistema.</p>
+                <p style="color: var(--c-text-2); margin-top: 1rem;">{{t "admin.empty_state"}}</p>
             </div>
             {{else}}
             <div class="shares-table-wrap">
                 <table class="shares-table">
                     <thead>
                         <tr>
-                            <th>ID / Nome</th>
-                            <th>Uploader</th>
-                            <th>Dimensione</th>
-                            <th>Caricato</th>
-                            <th>Scadenza / Limiti</th>
-                            <th>Azioni</th>
+                            <th>{{t "admin.col_id_name"}}</th>
+                            <th>{{t "admin.col_uploader"}}</th>
+                            <th>{{t "admin.col_size"}}</th>
+                            <th>{{t "admin.col_uploaded"}}</th>
+                            <th>{{t "admin.col_expiry_limits"}}</th>
+                            <th>{{t "admin.col_actions"}}</th>
                         </tr>
                     </thead>
                     <tbody id="admin-shares-list">
                         {{range .Files}}
                         <tr id="share-{{.Token}}">
                             <td class="admin-secret-cell">
-                                <strong class="admin-secret-badge" title="ID Segreto: {{.Token}}">
+                                <strong class="admin-secret-badge" title="{{t "admin.secret_id"}}: {{.Token}}">
                                     <span class="admin-secret-lock" aria-hidden="true">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                             stroke-linecap="round" stroke-linejoin="round">
@@ -116,10 +114,10 @@
                                             <path d="M7 11V8a5 5 0 0 1 10 0v3"></path>
                                         </svg>
                                     </span>
-                                    [Oscurato]
+                                    [{{t "admin.hidden"}}]
                                 </strong>
                                 {{if .PasswordHash}}
-                                <span class="admin-password-badge" title="Protetto da Password" aria-label="Protetto da password">
+                                <span class="admin-password-badge" title="{{t "admin.password_protected"}}" aria-label="{{t "admin.password_protected"}}">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                         stroke-linecap="round" stroke-linejoin="round">
                                         <circle cx="7" cy="15" r="4"></circle>
@@ -136,23 +134,23 @@
                             <td><span title="{{fmtDate .CreatedAt}}">{{daysAgo .CreatedAt}}</span></td>
                             <td>
                                 {{if isExpired .ExpiresAt}}
-                                <span style="color: var(--c-danger);">Scaduto</span>
+                                <span style="color: var(--c-danger);">{{t "admin.expired"}}</span>
                                 {{else}}
                                 <span style="color: var(--c-text-2);">{{daysLeft .ExpiresAt}}</span>
                                 {{end}}
                                 {{if gt .MaxDownloads 0}}
-                                <br><small style="color: var(--c-warn);">Max DL:
+                                <br><small style="color: var(--c-warn);">{{t "admin.max_dl"}}:
                                     {{.Downloaded}}/{{.MaxDownloads}}</small>
                                 {{else}}
-                                <br><small style="color: var(--c-text-3);">DL: {{.Downloaded}}</small>
+                                <br><small style="color: var(--c-text-3);">{{t "admin.dl"}}: {{.Downloaded}}</small>
                                 {{end}}
                             </td>
                             <td>
                                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                                     <button class="btn btn-danger btn-xs" hx-delete="/share/{{.Token}}"
                                         hx-target="#share-{{.Token}}" hx-swap="delete"
-                                        hx-confirm="Sei sicuro di voler eliminare forzatamente questo file di {{.Uploader}}?">
-                                        Elimina
+                                        hx-confirm="{{t "admin.force_delete_confirm" .Uploader}}">
+                                        {{t "admin.delete"}}
                                     </button>
                                 </div>
                             </td>
@@ -161,8 +159,7 @@
                     </tbody>
                 </table>
             </div>
-            <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--c-text-2); text-align: center;">Per questioni
-                di privacy, i file degli utenti non sono scaricabili o visibili in chiaro dagli amministratori.</p>
+            <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--c-text-2); text-align: center;">{{t "admin.privacy_note"}}</p>
             {{end}}
         </section>
     </main>

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
@@ -25,21 +25,21 @@
       {{end}}
     </div>
 
-    <h1 class="auth-title">Bentornato</h1>
-    <p class="auth-subtitle">Accedi con le credenziali aziendali{{if .MockMode}} <span class="badge-dev">DEV
-        MODE</span>{{end}}</p>
+    <h1 class="auth-title">{{t "login.title"}}</h1>
+    <p class="auth-subtitle">{{t "login.subtitle"}}{{if .MockMode}} <span class="badge-dev">{{t "login.dev_mode"}}
+      </span>{{end}}</p>
 
     <form hx-post="/login" hx-target="#login-error" hx-swap="outerHTML" hx-indicator="#spinner" class="auth-form">
 
       <div class="field-group">
-        <label for="username">Username</label>
-        <input type="text" id="username" name="username" autocomplete="username" placeholder="nome.cognome" required
+        <label for="username">{{t "login.username"}}</label>
+        <input type="text" id="username" name="username" autocomplete="username" placeholder="{{t "login.username_placeholder"}}" required
           autofocus />
       </div>
 
       <div class="field-group">
-        <label for="password">Password</label>
-        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="••••••••"
+        <label for="password">{{t "login.password"}}</label>
+        <input type="password" id="password" name="password" autocomplete="current-password" placeholder="********"
           required />
       </div>
 
@@ -47,7 +47,7 @@
 
       <button type="submit" class="btn btn-primary btn-full">
         <span id="spinner" class="htmx-indicator spinner-ring"></span>
-        Accedi
+        {{t "login.signin"}}
       </button>
     </form>
   </div>

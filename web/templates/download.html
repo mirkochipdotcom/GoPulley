@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>GoPulley — Scarica file</title>
+    <title>GoPulley - {{t "download.page_title"}}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css" />
@@ -30,36 +30,35 @@
         {{if .Error}}
         <div class="dl-state error-state">
             <div class="state-icon">⚠️</div>
-            <h2>File non disponibile</h2>
+            <h2>{{t "download.file_unavailable"}}</h2>
             <p>{{.Error}}</p>
-            <a href="/" class="btn btn-secondary">Torna alla home</a>
+            <a href="/" class="btn btn-secondary">{{t "download.back_home"}}</a>
         </div>
 
         {{else if .Expired}}
         <div class="dl-state expired-state">
             <div class="state-icon">🕒</div>
-            <h2>Link non valido</h2>
-            <p>Questo link di condivisione è scaduto il <strong>{{fmtDate .Share.ExpiresAt}}</strong>, oppure ha
-                raggiunto il limite massimo di download consentiti.</p>
-            <p class="text-muted">Chiedi al mittente di condividere nuovamente il file.</p>
-            <a href="/" class="btn btn-secondary">Torna alla home</a>
+            <h2>{{t "download.invalid_link"}}</h2>
+            <p>{{t "download.invalid_link_desc"}} <strong>{{fmtDate .Share.ExpiresAt}}</strong>, {{t "download.invalid_link_desc_2"}}</p>
+            <p class="text-muted">{{t "download.ask_sender"}}</p>
+            <a href="/" class="btn btn-secondary">{{t "download.back_home"}}</a>
         </div>
 
         {{else if .RequiresAuth}}
         <div class="dl-state auth-state" style="text-align: center;">
             <div class="state-icon">🔒</div>
-            <h2>Inserisci Password</h2>
-            <p>Questo file è protetto da password.</p>
+            <h2>{{t "download.enter_password"}}</h2>
+            <p>{{t "download.password_protected"}}</p>
             {{if .PasswordFailed}}
             <div class="error-msg" style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 0.5rem; color: #dc2626;">
-                ⚠️ Password errata. Riprova.
+                ⚠️ {{t "download.wrong_password"}}
             </div>
             {{end}}
             <form id="password-form" method="POST" action="/d/{{.Share.Token}}"
                 style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
-                <input type="password" name="password" placeholder="Password" required autofocus
+                <input type="password" name="password" placeholder="{{t "download.password_placeholder"}}" required autofocus
                     style="padding: 0.75rem; border: 1px solid var(--border-light); border-radius: var(--radius-sm); font-size: 1rem;">
-                <button type="submit" class="btn btn-primary" style="justify-content: center;">Sblocca</button>
+                <button type="submit" class="btn btn-primary" style="justify-content: center;">{{t "download.unlock"}}</button>
             </form>
         </div>
 
@@ -71,11 +70,11 @@
             <h2 class="filename">{{.Share.OriginalName}}</h2>
             <div class="file-meta">
                 <span class="meta-chip">{{.HumanSz}}</span>
-                <span class="meta-chip">⏳ Scade {{daysLeft .Share.ExpiresAt}}</span>
+                <span class="meta-chip">⏳ {{t "download.expires_chip"}} {{daysLeft .Share.ExpiresAt}}</span>
                 <span class="meta-chip" id="dl-count">↓ {{.Share.Downloaded}}{{if gt .Share.MaxDownloads 0}} /
-                    {{.Share.MaxDownloads}}{{end}} download</span>
+                    {{.Share.MaxDownloads}}{{end}} {{t "download.downloads"}}</span>
             </div>
-            <p class="text-muted">Condiviso da <strong>{{.Share.Uploader}}</strong></p>
+            <p class="text-muted">{{t "download.shared_by"}} <strong>{{.Share.Uploader}}</strong></p>
 
             <a href="/download/{{.Share.Token}}" class="btn btn-primary btn-dl" id="dl-btn">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -84,16 +83,16 @@
                     <polyline points="7 10 12 15 17 10" />
                     <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                Scarica file
+                {{t "download.download_file"}}
             </a>
 
-            <p class="expires-note">Scade il <strong>{{fmtDate .Share.ExpiresAt}}</strong></p>
+            <p class="expires-note">{{t "download.expires_on"}} <strong>{{fmtDate .Share.ExpiresAt}}</strong></p>
 
             {{if .SHA256}}
             <div class="sha256-box">
                 <span class="sha256-label">SHA-256</span>
                 <code class="sha256-value" id="sha256-value">{{.SHA256}}</code>
-                <button class="btn-copy-sha256" onclick="copySHA256()" title="Copia SHA-256">
+                <button class="btn-copy-sha256" onclick="copySHA256()" title="{{t "download.copy_sha"}}">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round">
                         <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -116,7 +115,7 @@
             const chip = document.getElementById('dl-count');
             if (!chip) return;
             const n = parseInt(chip.textContent.match(/\d+/) ?? [0]) + 1;
-            chip.textContent = '↓ ' + n + ' download';
+            chip.textContent = '↓ ' + n + ' {{t "download.downloads"}}';
         });
 
         // ── Copy SHA-256 ─────────────────────────────────────────────────

@@ -4,342 +4,218 @@
 
 # GoPulley
 
-**Condivisione file aziendale — veloce, sicura, containerizzata**
+**Fast, secure, containerized enterprise file sharing**
 
-*Alternativa self-hosted a WeTransfer, integrata con Active Directory*
+*Self-hosted WeTransfer-style alternative with Active Directory integration*
 
 [![Go](https://img.shields.io/badge/Go-1.22-00ADD8?logo=go)](https://go.dev)
 [![HTMX](https://img.shields.io/badge/HTMX-2.0-3D72D7?logo=html5)](https://htmx.org)
 [![SQLite](https://img.shields.io/badge/SQLite-embedded-003B57?logo=sqlite)](https://sqlite.org)
 [![Docker](https://img.shields.io/badge/Docker-alpine-2496ED?logo=docker)](https://docker.com)
-[![License](https://img.shields.io/badge/license-%20%20GNU%20AGPLv3%20-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-GNU%20AGPLv3-green)](LICENSE)
 [![Container](https://img.shields.io/badge/ghcr.io-gopulley-7c3aed?logo=github)](https://github.com/mirkochipdotcom/GoPulley/pkgs/container/gopulley)
 
 </div>
 
 ---
 
-## Cos'è GoPulley
-
-GoPulley è un'applicazione di **file sharing interno** pensata per ambienti aziendali e pubblici. Permette agli utenti autenticati via **Active Directory / LDAP** di caricare file e condividerli tramite link temporanei, con scadenza automatica configurabile.
-
-Tutto gira in un **singolo container** leggero (~25 MB), senza dipendenze esterne: niente PHP, niente Nginx separato, niente database server.
+Italian version: [README.it.md](README.it.md)
 
 ---
 
-## Caratteristiche
+## What is GoPulley
 
-| Feature | Dettaglio |
+GoPulley is an internal file-sharing application for enterprise and public organizations.
+Authenticated users (Active Directory / LDAP) can upload files and share them with temporary links and configurable expiration.
+
+The app runs in a **single lightweight container**, with no external runtime stack.
+
+---
+
+## Features
+
+| Feature | Details |
 |---|---|
-| 🔐 **Login AD/LDAP** | Bind diretto sul Domain Controller, supporto `ldap://` e `ldaps://` |
-| 👥 **Restrizione per gruppo** | Accesso limitato ai membri di un gruppo AD specifico (`memberOf`) |
-| 📤 **Upload drag & drop** | Interfaccia moderna, senza refresh di pagina (HTMX) |
-| ⏱️ **Scadenza configurabile** | 1 / 7 / 30 giorni / 1 anno o valore custom |
-| 🔗 **Link pubblici** | Chiunque con il link può scaricare, senza login |
-| 🗑️ **Pulizia automatica** | Goroutine elimina file e record scaduti ogni ora |
-| 🐳 **Single container** | Multi-stage Docker/Podman, immagine finale ~25 MB |
-| 🌙 **Dark mode** | UI moderna, glassmorphism, Inter font, zero npm |
-| 🧾 **SHA-256 opzionale** | Calcola e memorizza lo SHA-256 dei file caricati e lo mostra nella pagina di download per verificare l'integrità; attivabile via `ENABLE_SHA256=true` |
+| AD/LDAP authentication | Direct bind to Domain Controller, supports `ldap://` and `ldaps://` |
+| Optional group restriction | Limit access to members of one AD group (`memberOf`) |
+| Modern upload UI | Drag and drop workflow with HTMX, no full page refresh |
+| Configurable expiration | 1 / 7 / 30 days / 1 year plus max constraints |
+| Public links | Recipients can download using the link |
+| Optional link password | Add password protection at share creation |
+| Optional max downloads | Auto-expire links after N downloads |
+| Chunked/resumable upload | Large files are uploaded in chunks and can resume |
+| User upload quotas | Per-user storage quota (`USER_QUOTA_MB`) |
+| Admin dashboard | Global file inventory and disk usage visibility |
+| Automatic cleanup | Removes expired shares and stale upload sessions |
+| Optional SHA-256 | Compute and show checksum for integrity verification |
+| Single container deploy | Docker/Podman, SQLite embedded |
 
 ---
 
-## Architettura
+## Architecture
 
-```
-┌─────────────────────────────────────────────┐
-│              Container GoPulley             │
-│                                             │
-│  ┌──────────────────────────────────────┐   │
-│  │         Binario Go (~12 MB)          │   │
-│  │  • HTTP server (net/http)            │   │
-│  │  • HTMX handler                      │   │
-│  │  • LDAP client + group check         │   │
-│  │  • Cleanup goroutine (ogni 1h)       │   │
-│  └──────────────────────────────────────┘   │
-│                                             │
-│  ┌────────────┐   ┌──────────────────────┐  │
-│  │ SQLite DB  │   │  File Storage        │  │
-│  │ /data/*.db │   │  /data/uploads/uuid/ │  │
-│  └────────────┘   └──────────────────────┘  │
-│         ↑                   ↑               │
-│         └──── Volume /data ─┘               │
-└─────────────────────────────────────────────┘
-         ↑ LDAP/LDAPS
-   Domain Controller (AD)
-```
+GoPulley is intentionally simple:
+- `cmd/server/main.go`: HTTP server, routes, sessions, handlers
+- `internal/auth/ldap.go`: LDAP bind and group checks
+- `internal/database/sqlite.go`: schema + CRUD
+- `internal/storage/file.go`: file persistence and streaming
+- `web/templates/*`: server-side HTML templates
+- `web/static/*`: CSS and vendored HTMX
 
-```
-filesharing/
-├── cmd/server/main.go              # Entrypoint: HTTP server, route, sessioni
-├── internal/
-│   ├── auth/ldap.go                # LDAP bind + verifica gruppo memberOf
-│   ├── config/config.go            # Lettura variabili d'ambiente
-│   ├── database/sqlite.go          # Schema SQLite, CRUD condivisioni
-│   └── storage/file.go             # I/O file, streaming download
-├── web/
-│   ├── templates/
-│   │   ├── login.html              # Pagina di login (HTMX)
-│   │   ├── dashboard.html          # Upload + lista condivisioni
-│   │   └── download.html           # Pagina pubblica download
-│   └── static/
-│       ├── css/style.css           # Design system dark-mode (vanilla CSS)
-│       └── js/htmx.min.js          # HTMX 2.0.4 (vendored)
-├── .github/workflows/release.yml   # CI/CD: build + push su ghcr.io ad ogni tag
-├── .env.example                    # Template configurazione
-├── compose.yml                     # Podman/Docker Compose
-├── Dockerfile                      # Multi-stage build
-└── go.mod
-```
+Persistent data lives under `/data` in the container:
+- SQLite database (`/data/gopulley.db`)
+- uploaded files (`/data/uploads/...`)
 
 ---
 
-## Quick Start
+## Quick start
 
-### Prerequisiti
+### Prerequisites
 
-- Podman 4.7+ (oppure Docker con il plugin Compose)
+- Podman 4.7+ (or Docker with Compose plugin)
 
-### Avvio in 3 passi
+### Start in 3 steps
 
 ```bash
-# 1. Scarica i file necessari (non serve clonare l'intero repo)
+# 1) Download runtime files
 curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/compose.yml
 curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/.env.example
 
-# 2. Crea e configura il file .env
+# 2) Configure env
 cp .env.example .env
-# Modifica .env con i tuoi parametri LDAP (o lascia LDAP_HOST=mock per il dev)
+# Edit .env for LDAP; keep LDAP_HOST=mock for local dev
 
-# 3. Crea la cartella dati locale e avvia
+# 3) Create data dir and start
 mkdir -p ./data/uploads
 podman compose up -d
 ```
 
-Apri il browser su **http://localhost:8080** — con `LDAP_HOST=mock` qualsiasi username/password è accettata.
+Open `http://localhost:8080`.
 
-> **Docker?** Funziona identicamente: sostituisci `podman` con `docker` in tutti i comandi.
+Docker works the same way (`docker compose ...`).
 
-> **Vuoi compilare dal sorgente?** Clona il repo e usa `podman compose up -d --build`.
+---
 
-### Dove vengono salvati i dati
+## Data directory
 
-Per default il volume è mappato su `./data` (accanto a `compose.yml`). Per cambiare percorso imposta `DATA_DIR` nel `.env`:
+By default, host data is mapped to `./data`.
+Use `DATA_DIR` in `.env` to move DB/uploads to another disk or a mounted network path.
 
 ```env
-# Default — cartella locale accanto a compose.yml
 DATA_DIR=./data
-
-# Disco dedicato
-DATA_DIR=/mnt/disco-dati/gopulley
-
-# Share di rete (NFS o CIFS già montato sull'host)
-DATA_DIR=/mnt/nas/gopulley
+# DATA_DIR=/mnt/storage/gopulley
+# DATA_DIR=/mnt/nas/gopulley
 ```
-
-> **Mapping di rete (NFS/SMB):** monta prima la share sull'host con `mount` o `/etc/fstab`, poi punta `DATA_DIR` al mountpoint. GoPulley non ha bisogno di configurazioni aggiuntive — usa il filesystem del mountpoint come qualsiasi altra directory.
->
-> Esempio con CIFS:
-> ```bash
-> sudo mount -t cifs //nas.esempio.it/gopulley /mnt/nas/gopulley \
->   -o username=utente,password=secret,uid=1001,gid=1001
-> # poi in .env:
-> # DATA_DIR=/mnt/nas/gopulley
-> ```
 
 ---
 
-## Configurazione
+## Configuration
 
-Copia `.env.example` in `.env` e adatta i valori:
+Copy `.env.example` to `.env` and adjust values.
 
-```bash
-cp .env.example .env
-```
+### Important variables
 
-### Variabili d'ambiente
+- `SESSION_SECRET`
+- `LDAP_HOST`, `LDAP_BASE_DN`, `LDAP_USER_DN_TEMPLATE`
+- `LDAP_REQUIRED_GROUP`, `LDAP_ADMIN_GROUP`, `ADMIN_USERS`, `LDAP_TLS_SKIP_VERIFY`
+- `MAX_GLOBAL_DAYS`, `MAX_UPLOAD_SIZE_MB`, `USER_QUOTA_MB`
+- `UPLOAD_CHUNK_SIZE_MB`, `UPLOAD_SESSION_TTL_HOURS`, `MAX_UPLOAD_SESSIONS_PER_USER`
+- `PUBLIC_BASE_URL`, `DATA_DIR`, `DB_PATH`, `UPLOAD_DIR`
+- `ENABLE_SHA256`
 
-| Variabile | Obbligatoria | Default | Descrizione |
-|---|---|---|---|
-| `SESSION_SECRET` | ✅ | — | Chiave HMAC per i cookie di sessione. Genera con `openssl rand -hex 32` |
-| `LDAP_HOST` | ✅ | `mock` | URL del Domain Controller. Es: `ldaps://dc.esempio.it:636` |
-| `LDAP_BASE_DN` | ✅ | — | Base DN del dominio. Es: `DC=esempio,DC=it` |
-| `LDAP_USER_DN_TEMPLATE` | ✅ | — | Template DN utente. Es: `%s@esempio.it` |
-| `LDAP_BIND_DN` | ⬜ | — | DN account di servizio per ricerche di gruppo |
-| `LDAP_BIND_PASSWORD` | ⬜ | — | Password account di servizio |
-| `LDAP_REQUIRED_GROUP` | ⬜ | — | CN del gruppo AD richiesto per l'accesso |
-| `MAX_GLOBAL_DAYS` | ⬜ | `30` | Durata massima di una condivisione (giorni) |
-| `MAX_UPLOAD_SIZE_MB` | ⬜ | `2048` | Dimensione massima per file singolo (MB) |
-| `DB_PATH` | ⬜ | `/data/gopulley.db` | Percorso database SQLite |
-| `UPLOAD_DIR` | ⬜ | `/data/uploads` | Cartella per i file caricati |
-| `APP_PORT` | ⬜ | `8080` | Porta HTTP del server |
-| `ENABLE_SHA256` | ⬜ | `false` | Se `true`, calcola e memorizza lo SHA-256 di ogni file caricato e lo mostra nella pagina di download per consentire la verifica dell'integrità del file. |
+### Upload behavior
 
-### Configurazione LDAP / Active Directory
+- Chunk size defaults to 10 MB (`UPLOAD_CHUNK_SIZE_MB`)
+- In-progress sessions are auto-expired (`UPLOAD_SESSION_TTL_HOURS`)
+- Concurrent in-progress uploads per user are capped (`MAX_UPLOAD_SESSIONS_PER_USER`)
 
-**Stile UPN (Active Directory moderno)**
+### Share protection options
+
+- Optional password at upload time
+- Optional max download count ("burn after N downloads")
+
+### LDAP examples
+
+UPN style (modern AD):
+
 ```env
-LDAP_HOST=ldaps://dc.esempio.it:636
-LDAP_BASE_DN=DC=esempio,DC=it
-LDAP_USER_DN_TEMPLATE=%s@esempio.it
+LDAP_HOST=ldaps://dc.example.com:636
+LDAP_BASE_DN=DC=example,DC=com
+LDAP_USER_DN_TEMPLATE=%s@example.com
 ```
 
-**Stile DN classico (OpenLDAP)**
+Classic DN style:
+
 ```env
-LDAP_HOST=ldap://ldap.esempio.it:389
-LDAP_BASE_DN=dc=esempio,dc=it
-LDAP_USER_DN_TEMPLATE=uid=%s,ou=Users,dc=esempio,dc=it
+LDAP_HOST=ldap://ldap.example.com:389
+LDAP_BASE_DN=dc=example,dc=com
+LDAP_USER_DN_TEMPLATE=uid=%s,ou=Users,dc=example,dc=com
 ```
-
-**Restrizione per gruppo AD**
-```env
-# Solo i membri di questo gruppo possono accedere
-LDAP_REQUIRED_GROUP=NOME-DEL-GRUPPO
-
-# Se gli utenti non hanno permessi di ricerca, aggiungi un service account
-LDAP_BIND_DN=CN=srv-gopulley,OU=ServiceAccounts,DC=esempio,DC=it
-LDAP_BIND_PASSWORD=password-servizio
-```
-
-> Il match sul gruppo è **case-insensitive** e cerca `CN=NOME-DEL-GRUPPO` nel campo `memberOf` dell'utente. Non è necessario specificare il DN completo del gruppo.
 
 ---
 
-## Avvio in produzione (Podman)
+## Production operations
 
 ```bash
-# Prima volta
+# first run
 podman compose up -d
 
-# Aggiornare all'ultima immagine
+# update to latest image
 podman compose pull && podman compose up -d
 
-# Logs
+# logs
 podman compose logs -f
 
-# Stop / restart
+# stop
 podman compose down
-podman compose up -d
 ```
-
-Il volume è mappato sulla directory `./data` (o sul percorso definito in `DATA_DIR` nel `.env`) e persiste il database SQLite e i file caricati tra i riavvii.
-
-<details>
-<summary>Avvio manuale senza Compose</summary>
-
-```bash
-podman run -d \
-  --name gopulley \
-  --restart unless-stopped \
-  -p 8080:8080 \
-  --env-file .env \
-  -v gopulley-data:/data \
-  ghcr.io/mirkochipdotcom/gopulley:latest
-```
-
-</details>
 
 ---
 
-## Immagini container (CI/CD)
+## Container images
 
-Le immagini sono pubblicate automaticamente su **GitHub Container Registry** ad ogni tag tramite GitHub Actions:
+Images are published automatically on GitHub Container Registry on tag push.
 
 ```bash
-# Ultima versione
+# latest
 podman pull ghcr.io/mirkochipdotcom/gopulley:latest
 
-# Versione specifica
-podman pull ghcr.io/mirkochipdotcom/gopulley:0.9dev
+# specific tag
+podman pull ghcr.io/mirkochipdotcom/gopulley:0.9.8
 ```
-
-Il workflow (`.github/workflows/release.yml`) si attiva con ogni `git push --tags` e:
-1. Compila il binario Go con la versione embedded via `-ldflags`
-2. Costruisce l'immagine Alpine multi-stage (~25 MB)
-3. Pubblica su `ghcr.io` con il tag del release e `latest`
 
 ---
 
-## Build da sorgente
+## Build from source
 
-Richiede Go 1.22+ e gcc (per `go-sqlite3`).
+Requires Go 1.22+ and gcc (`go-sqlite3` uses CGO).
 
 ```bash
-# Linux / macOS
 CGO_ENABLED=1 go build -ldflags="-s -w" -o gopulley ./cmd/server
-
-# Windows
-set CGO_ENABLED=1
-go build -ldflags="-s -w" -o gopulley.exe ./cmd/server
 ```
 
-Avvio locale:
+Run local dev:
+
 ```bash
 LDAP_HOST=mock SESSION_SECRET=dev-secret ./gopulley
-# oppure su Windows:
-$env:LDAP_HOST="mock"; $env:SESSION_SECRET="dev-secret"; .\gopulley.exe
 ```
 
 ---
 
-## Flussi applicativi
+## Internationalization
 
-### Login
-1. L'utente inserisce username e password
-2. Go tenta il bind LDAP con `LDAP_USER_DN_TEMPLATE` compilato
-3. Se `LDAP_REQUIRED_GROUP` è configurato, ricerca `memberOf` e verifica l'appartenenza al gruppo
-4. In caso di successo, genera un cookie di sessione (HttpOnly, SameSite=Lax)
+UI strings are served via i18n bundles.
+Current supported locales in code:
+- `en`
+- `it`
+- `es`
+- `de`
+- `fr`
 
-### Upload
-1. L'utente trascina un file nella drop zone e seleziona la scadenza
-2. Go valida che `giorni ≤ MAX_GLOBAL_DAYS` e `size ≤ MAX_UPLOAD_SIZE_MB`
-3. Salva il file in `/data/uploads/<uuid>/<nome-originale>`
-4. Scrive in SQLite: token UUID, percorso, scadenza, uploader
-5. HTMX mostra il link di condivisione inline, senza refresh di pagina
-
-### Download (pubblica)
-- `GET /d/<token>` — pagina pubblica con nome file, dimensione, scadenza e pulsante download
-- `GET /download/<token>` — streaming diretto del file con `Content-Disposition: attachment`
-- Link scaduti mostrano un errore graceful invece di un 404 generico
-
-### Pulizia automatica
-```
-ogni 1 ora:
-  SELECT * FROM shares WHERE expires_at < NOW()
-  → os.RemoveAll(filepath.Dir(filePath))   # rimuove la cartella uuid
-  → DELETE FROM shares WHERE token = ?
-```
+Locale is resolved from `Accept-Language` with fallback to English.
 
 ---
 
-## Schema database
+## License
 
-```sql
-CREATE TABLE shares (
-    id            INTEGER PRIMARY KEY AUTOINCREMENT,
-    token         TEXT     NOT NULL UNIQUE,   -- UUID pubblico del link
-    file_path     TEXT     NOT NULL,          -- percorso fisico sul disco
-    original_name TEXT     NOT NULL,          -- nome originale del file
-    size_bytes    INTEGER  NOT NULL,
-    uploader      TEXT     NOT NULL,          -- username AD
-    created_at    DATETIME NOT NULL,
-    expires_at    DATETIME NOT NULL,
-    downloaded    INTEGER  NOT NULL DEFAULT 0
-);
-```
-
----
-
-## Sicurezza
-
-- I cookie di sessione usano HMAC-SHA256 (`gorilla/securecookie`) — il `SESSION_SECRET` deve essere lungo almeno 32 byte random
-- Tutte le condivisioni sono verificate per ownership prima dell'eliminazione (403 altrimenti)
-- File caricati salvati in directory UUID isolate — nessuna collisione di nomi possibile
-- Il container gira come utente non-root `gopulley` (uid 1001)
-- Nessuna shell nel container finale (alpine minimo)
-- Il `.env` è escluso dal repository via `.gitignore`
-
----
-
-## Licenza
-
-GNU AGPLv3 — vedi [LICENSE](LICENSE)
+GNU AGPLv3 - see [LICENSE](LICENSE).
