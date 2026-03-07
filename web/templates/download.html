@@ -38,10 +38,29 @@
         {{else if .Expired}}
         <div class="dl-state expired-state">
             <div class="state-icon">🕒</div>
-            <h2>Link scaduto</h2>
-            <p>Questo link di condivisione è scaduto il <strong>{{fmtDate .Share.ExpiresAt}}</strong>.</p>
+            <h2>Link non valido</h2>
+            <p>Questo link di condivisione è scaduto il <strong>{{fmtDate .Share.ExpiresAt}}</strong>, oppure ha
+                raggiunto il limite massimo di download consentiti.</p>
             <p class="text-muted">Chiedi al mittente di condividere nuovamente il file.</p>
             <a href="/" class="btn btn-secondary">Torna alla home</a>
+        </div>
+
+        {{else if .RequiresAuth}}
+        <div class="dl-state auth-state" style="text-align: center;">
+            <div class="state-icon">🔒</div>
+            <h2>Inserisci Password</h2>
+            <p>Questo file è protetto da password.</p>
+            {{if .PasswordFailed}}
+            <div class="error-msg" style="margin-bottom: 1rem; padding: 0.75rem; background: rgba(220, 38, 38, 0.1); border: 1px solid rgba(220, 38, 38, 0.3); border-radius: 0.5rem; color: #dc2626;">
+                ⚠️ Password errata. Riprova.
+            </div>
+            {{end}}
+            <form id="password-form" method="POST" action="/d/{{.Share.Token}}"
+                style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                <input type="password" name="password" placeholder="Password" required autofocus
+                    style="padding: 0.75rem; border: 1px solid var(--border-light); border-radius: var(--radius-sm); font-size: 1rem;">
+                <button type="submit" class="btn btn-primary" style="justify-content: center;">Sblocca</button>
+            </form>
         </div>
 
         {{else}}
@@ -53,7 +72,8 @@
             <div class="file-meta">
                 <span class="meta-chip">{{.HumanSz}}</span>
                 <span class="meta-chip">⏳ Scade {{daysLeft .Share.ExpiresAt}}</span>
-                <span class="meta-chip" id="dl-count">↓ {{.Share.Downloaded}} download</span>
+                <span class="meta-chip" id="dl-count">↓ {{.Share.Downloaded}}{{if gt .Share.MaxDownloads 0}} /
+                    {{.Share.MaxDownloads}}{{end}} download</span>
             </div>
             <p class="text-muted">Condiviso da <strong>{{.Share.Uploader}}</strong></p>
 

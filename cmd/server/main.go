@@ -17,6 +17,7 @@ import (
 	"github.com/youorg/gopulley/internal/config"
 	"github.com/youorg/gopulley/internal/database"
 	"github.com/youorg/gopulley/internal/storage"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // brandLogoSrc risolve il logo aziendale in un URL pronto per src=.
@@ -55,31 +56,31 @@ const sessionName = "gopulley-session"
 
 // ── Template helpers ─────────────────────────────────────────────────────────
 
-func fileIcon(filename string) string {
+func fileIcon(filename string) template.HTML {
 	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(filename), "."))
 	switch ext {
 	case "jpg", "jpeg", "png", "gif", "webp", "svg", "bmp", "ico":
-		return "🖼️"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="M21 15l-5-5L5 21"></path></svg>`)
 	case "mp4", "avi", "mkv", "mov", "wmv", "flv", "webm":
-		return "🎬"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="16" rx="2"></rect><path d="M10 9l5 3-5 3V9z"></path></svg>`)
 	case "mp3", "wav", "flac", "ogg", "aac", "m4a":
-		return "🎵"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V6l11-2v12"></path><circle cx="6" cy="18" r="3"></circle><circle cx="17" cy="16" r="3"></circle></svg>`)
 	case "zip", "rar", "7z", "tar", "gz", "bz2":
-		return "🗜️"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"></rect><path d="M10 7h4M10 11h4M10 15h4"></path></svg>`)
 	case "pdf":
-		return "📕"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M7 14h2m2 0h2m2 0h2"></path></svg>`)
 	case "doc", "docx", "odt", "rtf":
-		return "📝"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h8M8 17h8"></path></svg>`)
 	case "xls", "xlsx", "ods", "csv":
-		return "📊"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 17V13m4 4V11m4 6V9"></path></svg>`)
 	case "ppt", "pptx", "odp":
-		return "📑"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 16l2.5-3 2 2 3.5-4"></path></svg>`)
 	case "txt", "md", "log":
-		return "📄"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h8M8 17h8"></path></svg>`)
 	case "js", "ts", "go", "py", "java", "c", "cpp", "cs", "rb", "php", "rs", "sh", "sql", "html", "css", "json", "xml", "yaml", "yml":
-		return "💻"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M16 18l6-6-6-6"></path><path d="M8 6l-6 6 6 6"></path></svg>`)
 	default:
-		return "📄"
+		return template.HTML(`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>`)
 	}
 }
 
@@ -97,21 +98,42 @@ func (a *App) loadTemplates(baseDir string) error {
 			if d <= 0 {
 				return "scaduto"
 			}
-			days := int(d.Hours() / 24)
-			if days == 0 {
-				return "scade oggi"
+			if d < 24*time.Hour {
+				hours := int(d.Hours())
+				if hours < 1 {
+					hours = 1
+				}
+				return fmt.Sprintf("%dh", hours)
 			}
+			days := int(d.Hours() / 24)
 			if days == 1 {
 				return "1 giorno"
 			}
 			return fmt.Sprintf("%d giorni", days)
 		},
+		"isExpiringSoon": func(t time.Time) bool {
+			d := time.Until(t)
+			return d > 0 && d < 24*time.Hour
+		},
 		"isExpired": func(t time.Time) bool {
 			return time.Now().After(t)
 		},
+		"daysAgo": func(t time.Time) string {
+			days := int(time.Since(t).Hours() / 24)
+			if days == 0 {
+				return "oggi"
+			}
+			if days == 1 {
+				return "ieri"
+			}
+			return fmt.Sprintf("%d giorni fa", days)
+		},
+		"safeHTMLAttr": func(s string) template.HTMLAttr {
+			return template.HTMLAttr(s)
+		},
 	}
 
-	names := []string{"login", "dashboard", "download"}
+	names := []string{"login", "dashboard", "download", "admin"}
 	a.templates = make(map[string]*template.Template, len(names))
 	for _, name := range names {
 		path := filepath.Join(baseDir, name+".html")
@@ -148,6 +170,18 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if a.getUsername(r) == "" {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
+			return
+		}
+		next(w, r)
+	}
+}
+
+func (a *App) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		sess, _ := a.store.Get(r, sessionName)
+		isAdmin, _ := sess.Values["is_admin"].(bool)
+		if !isAdmin {
+			http.Error(w, "forbidden: admin access required", http.StatusForbidden)
 			return
 		}
 		next(w, r)
@@ -200,7 +234,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("📥 Ricevuta richiesta di login per: %s", username)
 
-	ok, err := auth.Authenticate(username, password, a.cfg)
+	ok, isAdmin, err := auth.Authenticate(username, password, a.cfg)
 	if err != nil {
 		log.Printf("auth error for %s: %v", username, err)
 		w.Header().Set("HX-Reswap", "outerHTML")
@@ -217,6 +251,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	sess, _ := a.store.Get(r, sessionName)
 	sess.Values["username"] = username
+	sess.Values["is_admin"] = isAdmin
 	sess.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   86400 * 7, // 7 days
@@ -246,35 +281,113 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 // GET /dashboard
 type dashData struct {
-	Username  string
-	Shares    []*database.Share
-	EnableSHA bool
-	MaxDays   int
-	BaseURL   string
-	Version   string
-	BrandName string
-	BrandLogo string
+	Username     string
+	IsAdmin      bool
+	Shares       []*database.Share
+	EnableSHA    bool
+	MaxDays      int
+	BaseURL      string
+	Version      string
+	BrandName    string
+	BrandLogo    string
+	QuotaMB      int64
+	UsedMB       int64
+	QuotaPercent int
 }
 
 func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
+	sess, _ := a.store.Get(r, sessionName)
+	isAdmin, _ := sess.Values["is_admin"].(bool)
+
 	shares, err := a.db.ListSharesByUser(username)
 	if err != nil {
 		log.Printf("list shares: %v", err)
 		shares = nil
 	}
 
+	var usedMB int64
+	var quotaPercent int
+	if a.cfg.UserQuotaMB > 0 {
+		totalBytes, err := a.db.GetUserTotalBytes(username)
+		if err == nil {
+			usedMB = totalBytes / (1024 * 1024)
+			quotaPercent = int((float64(usedMB) / float64(a.cfg.UserQuotaMB)) * 100)
+			if quotaPercent > 100 {
+				quotaPercent = 100
+			}
+		} else {
+			log.Printf("get quota bytes error: %v", err)
+		}
+	}
+
 	baseURL := a.publicBaseURL(r)
 
 	a.render(w, "dashboard", dashData{
-		Username:  username,
-		Shares:    shares,
-		EnableSHA: a.cfg.EnableSHA256,
-		MaxDays:   a.cfg.MaxGlobalDays,
-		BaseURL:   baseURL,
-		Version:   AppVersion,
-		BrandName: a.cfg.BrandName,
-		BrandLogo: a.cfg.BrandLogoPath,
+		Username:     username,
+		IsAdmin:      isAdmin,
+		Shares:       shares,
+		EnableSHA:    a.cfg.EnableSHA256,
+		MaxDays:      a.cfg.MaxGlobalDays,
+		BaseURL:      baseURL,
+		Version:      AppVersion,
+		BrandName:    a.cfg.BrandName,
+		BrandLogo:    a.cfg.BrandLogoPath,
+		QuotaMB:      a.cfg.UserQuotaMB,
+		UsedMB:       usedMB,
+		QuotaPercent: quotaPercent,
+	})
+}
+
+// GET /admin
+type adminDashData struct {
+	Username     string
+	Version      string
+	BrandName    string
+	BrandLogo    string
+	Files        []*database.Share
+	TotalSpace   int64
+	FreeSpace    int64
+	UsedSpace    int64
+	SpacePercent int
+}
+
+func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
+	username := a.getUsername(r)
+
+	// Recupera tutti i file usando ListAllShares (che va prima aggiunta in sqlite.go)
+	// Nota: qui chiameremo un nuovo metodo db.ListAllShares
+	files, err := a.db.ListAllShares()
+	if err != nil {
+		log.Printf("list all shares error: %v", err)
+		files = nil
+	}
+
+	// Calculate /data disk space
+	dataPath := filepath.Dir(a.cfg.DBPath)
+	freeSpace, totalSpace, err := storage.GetDiskUsage(dataPath)
+	var usedSpace int64
+	var spacePercent int
+	if err == nil && totalSpace > 0 {
+		usedSpace = totalSpace - freeSpace
+		spacePercent = int((float64(usedSpace) / float64(totalSpace)) * 100)
+		if spacePercent > 100 {
+			spacePercent = 100
+		}
+	} else if err != nil {
+		log.Printf("disk usage error for %s: %v", dataPath, err)
+	}
+
+	a.render(w, "admin", adminDashData{
+		Username:     username,
+		Version:      AppVersion,
+		BrandName:    a.cfg.BrandName,
+		BrandLogo:    a.cfg.BrandLogoPath,
+		Files:        files,
+		TotalSpace:   totalSpace,
+		FreeSpace:    freeSpace,
+		UsedSpace:    usedSpace,
+		SpacePercent: spacePercent,
 	})
 }
 
@@ -297,12 +410,44 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	maxDownloads := 0
+	fmt.Sscanf(r.FormValue("max_downloads"), "%d", &maxDownloads)
+	if maxDownloads < 0 {
+		maxDownloads = 0
+	}
+
+	password := r.FormValue("password")
+	var passwordHash string
+	if password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("bcrypt error: %v", err)
+			http.Error(w, "errore server (password)", 500)
+			return
+		}
+		passwordHash = string(hash)
+	}
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "nessun file ricevuto", http.StatusBadRequest)
 		return
 	}
 	file.Close()
+
+	// Quota check
+	if a.cfg.UserQuotaMB > 0 {
+		usedBytes, err := a.db.GetUserTotalBytes(username)
+		if err != nil {
+			log.Printf("quota check error: %v", err)
+			http.Error(w, "errore server (quota)", 500)
+			return
+		}
+		if usedBytes+header.Size > a.cfg.UserQuotaMB*1024*1024 {
+			http.Error(w, "quota spazio superata", http.StatusForbidden)
+			return
+		}
+	}
 
 	// Ensure upload dir exists
 	if err := os.MkdirAll(a.cfg.UploadDir, 0750); err != nil {
@@ -321,7 +466,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	token := uuid.New().String()
 	expiresAt := time.Now().UTC().Add(time.Duration(days) * 24 * time.Hour)
 
-	share, err := a.db.CreateShare(token, filePath, originalName, sizeBytes, username, expiresAt, "")
+	share, err := a.db.CreateShare(token, filePath, originalName, sizeBytes, username, expiresAt, "", passwordHash, maxDownloads)
 	if err != nil {
 		log.Printf("create share: %v", err)
 		storage.DeleteFile(filePath)
@@ -487,14 +632,16 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 	share, err := a.db.GetShareByToken(token)
 
 	type dlData struct {
-		Share     *database.Share
-		Expired   bool
-		Error     string
-		HumanSz   string
-		SHA256    string
-		Version   string
-		BrandName string
-		BrandLogo string
+		Share          *database.Share
+		Expired        bool
+		Error          string
+		HumanSz        string
+		SHA256         string
+		Version        string
+		BrandName      string
+		BrandLogo      string
+		RequiresAuth   bool
+		PasswordFailed bool
 	}
 	data := dlData{
 		Version:   AppVersion,
@@ -518,7 +665,49 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 	data.SHA256 = share.SHA256
 	if time.Now().After(share.ExpiresAt) {
 		data.Expired = true
+	} else if share.MaxDownloads > 0 && share.Downloaded >= share.MaxDownloads {
+		data.Expired = true
 	}
+
+	if share.PasswordHash != "" && !data.Expired {
+		sess, err := a.store.Get(r, sessionName)
+		if err != nil {
+			log.Printf("get session: %v", err)
+			sess, _ = a.store.New(r, sessionName)
+		}
+
+		unlocked, _ := sess.Values["ul_"+token].(bool)
+
+		if r.Method == http.MethodPost {
+			pass := r.FormValue("password")
+			if err := bcrypt.CompareHashAndPassword([]byte(share.PasswordHash), []byte(pass)); err == nil {
+				sess.Values["ul_"+token] = true
+				sess.Options = &sessions.Options{
+					Path:     "/",
+					MaxAge:   86400 * 7, // 7 days
+					HttpOnly: true,
+					SameSite: http.SameSiteLaxMode,
+					Secure:   false,
+				}
+
+				if err := sess.Save(r, w); err != nil {
+					log.Printf("save session: %v", err)
+					http.Error(w, "errore server", 500)
+					return
+				}
+
+				http.Redirect(w, r, "/d/"+token, http.StatusSeeOther)
+				return
+			} else {
+				data.PasswordFailed = true
+			}
+		}
+
+		if !unlocked {
+			data.RequiresAuth = true
+		}
+	}
+
 	a.render(w, "download", data)
 }
 
@@ -530,15 +719,34 @@ func (a *App) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", 404)
 		return
 	}
-	if time.Now().After(share.ExpiresAt) {
+	if time.Now().After(share.ExpiresAt) || (share.MaxDownloads > 0 && share.Downloaded >= share.MaxDownloads) {
 		http.Error(w, "link scaduto", 410)
 		return
+	}
+
+	if share.PasswordHash != "" {
+		sess, _ := a.store.Get(r, sessionName)
+		unlocked, _ := sess.Values["ul_"+token].(bool)
+		if !unlocked {
+			http.Error(w, "forbidden", 403)
+			return
+		}
 	}
 
 	if err := storage.ServeFile(w, r, share.FilePath, share.OriginalName); err != nil {
 		log.Printf("serve file: %v", err)
 	}
-	go a.db.IncrementDownload(token)
+
+	a.db.IncrementDownload(token)
+
+	// Burn after reading logic
+	if share.MaxDownloads > 0 && share.Downloaded+1 >= share.MaxDownloads {
+		go func() {
+			storage.DeleteFile(share.FilePath)
+			a.db.DeleteShare(token)
+			log.Printf("burned share %s after %d downloads", token, share.Downloaded+1)
+		}()
+	}
 }
 
 // ── Cleanup goroutine ─────────────────────────────────────────────────────────
@@ -660,6 +868,9 @@ func main() {
 		http.Error(w, "method not allowed", 405)
 	}))
 	mux.HandleFunc("/shares-list", app.requireAuth(app.handleSharesList))
+
+	// Admin Panel route
+	mux.HandleFunc("/admin", app.requireAuth(app.requireAdmin(app.handleAdminDashboard)))
 
 	if cfg.LDAPHost == "mock" {
 		log.Printf("[WARN] RUNNING IN MOCK MODE - any credentials accepted")

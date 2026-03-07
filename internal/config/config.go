@@ -38,6 +38,13 @@ type Config struct {
 	// EnableSHA256: se true, calcola e memorizza lo SHA-256 di ogni file caricato
 	// e lo mostra nella pagina di download.
 	EnableSHA256 bool
+
+	// LDAPAdminGroup: AD group defining admins.
+	LDAPAdminGroup string
+	// AdminUsers: ';' separated list of explicit admin usernames (e.g. name.surname).
+	AdminUsers string
+	// UserQuotaMB: Max total space a user can fill.
+	UserQuotaMB int64
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -61,6 +68,9 @@ func Load() *Config {
 		BrandName:          getEnv("BRAND_NAME", ""),
 		BrandLogoPath:      getEnv("BRAND_LOGO", ""),
 		EnableSHA256:       getEnvBool("ENABLE_SHA256", false),
+		LDAPAdminGroup:     getEnv("LDAP_ADMIN_GROUP", ""),
+		AdminUsers:         getEnv("ADMIN_USERS", ""),
+		UserQuotaMB:        int64(getEnvInt("USER_QUOTA_MB", 0)),
 	}
 }
 

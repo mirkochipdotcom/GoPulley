@@ -1,6 +1,6 @@
 module github.com/youorg/gopulley
 
-go 1.22
+go 1.24.0
 
 require (
 	github.com/go-ldap/ldap/v3 v3.4.8
@@ -14,4 +14,5 @@ require (
 	github.com/go-asn1-ber/asn1-ber v1.5.5 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	golang.org/x/crypto v0.21.0 // indirect
+	golang.org/x/sys v0.41.0 // indirect
 )

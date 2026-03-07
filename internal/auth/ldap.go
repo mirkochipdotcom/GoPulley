@@ -20,15 +20,17 @@ import (
 //
 // Set LDAP_TLS_SKIP_VERIFY=true for self-signed / internal CA certificates.
 // Set LDAP_HOST=mock to bypass LDAP entirely (dev mode).
-func Authenticate(username, password string, cfg *config.Config) (bool, error) {
+//
+// Returns (isAuthenticated, isAdmin, error)
+func Authenticate(username, password string, cfg *config.Config) (bool, bool, error) {
 	username = strings.TrimSpace(username)
 	if username == "" || password == "" {
-		return false, nil
+		return false, false, nil
 	}
 
 	// ── MOCK / DEV MODE ─────────────────────────────────────────────────────
 	if cfg.LDAPHost == "mock" {
-		return true, nil
+		return true, true, nil
 	}
 
 	// ── TLS CONFIG ──────────────────────────────────────────────────────────
@@ -41,10 +43,10 @@ func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 	log.Printf("ldap: dialing %s", cfg.LDAPHost)
 	l, err := ldap.DialURL(cfg.LDAPHost, ldap.DialWithTLSConfig(tlsCfg))
 	if err != nil {
-		return false, fmt.Errorf("ldap dial: %w", err)
+		return false, false, fmt.Errorf("ldap dial: %w", err)
 	}
 	defer l.Close()
-	
+
 	l.SetTimeout(5 * time.Second)
 
 	// ── StartTLS (per ldap:// su porta 389) ─────────────────────────────────
@@ -56,7 +58,7 @@ func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 			// Riconnettiti in chiaro poichè il socket precedente è rimasto "sporco"
 			l, err = ldap.DialURL(cfg.LDAPHost)
 			if err != nil {
-				return false, fmt.Errorf("ldap dial (fallback): %w", err)
+				return false, false, fmt.Errorf("ldap dial (fallback): %w", err)
 			}
 			l.SetTimeout(5 * time.Second)
 		} else {
@@ -69,20 +71,32 @@ func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 	log.Printf("ldap: attempting bind for %s", userDN)
 	if err := l.Bind(userDN, password); err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials) {
-			return false, nil // credenziali errate → login fallito
+			return false, false, nil // credenziali errate → login fallito
 		}
-		return false, fmt.Errorf("ldap bind (%s): %w", userDN, err)
+		return false, false, fmt.Errorf("ldap bind (%s): %w", userDN, err)
+	}
+
+	// ── EXPLICIT ADMIN LIST CHECK ───────────────────────────────────────────
+	isAdmin := false
+	if cfg.AdminUsers != "" {
+		for _, adminUser := range strings.Split(cfg.AdminUsers, ";") {
+			if strings.EqualFold(strings.TrimSpace(adminUser), username) {
+				isAdmin = true
+				break
+			}
+		}
 	}
 
 	// ── GROUP MEMBERSHIP CHECK ───────────────────────────────────────────────
-	if cfg.LDAPRequiredGroup == "" {
-		return true, nil
+	// If no LDAP groups are required (neither for login nor for admin right derivation), we can return early.
+	if cfg.LDAPRequiredGroup == "" && cfg.LDAPAdminGroup == "" {
+		return true, isAdmin, nil
 	}
 
 	// Re-bind con service account se configurato (utile se l'utente non può cercare)
 	if cfg.LDAPBindDN != "" {
 		if err := l.Bind(cfg.LDAPBindDN, cfg.LDAPBindPassword); err != nil {
-			return false, fmt.Errorf("ldap service bind: %w", err)
+			return false, false, fmt.Errorf("ldap service bind: %w", err)
 		}
 	}
 
@@ -104,24 +118,41 @@ func Authenticate(username, password string, cfg *config.Config) (bool, error) {
 
 	result, err := l.Search(searchReq)
 	if err != nil {
-		return false, fmt.Errorf("ldap search (base=%s, filter=%s): %w", cfg.LDAPBaseDN, searchFilter, err)
+		return false, false, fmt.Errorf("ldap search (base=%s, filter=%s): %w", cfg.LDAPBaseDN, searchFilter, err)
 	}
 	if len(result.Entries) == 0 {
-		return false, fmt.Errorf("ldap: user %q not found under base DN %q", username, cfg.LDAPBaseDN)
+		return false, false, fmt.Errorf("ldap: user %q not found under base DN %q", username, cfg.LDAPBaseDN)
 	}
 
-	// Verifica membership (case-insensitive, match CN= nel DN completo)
+	// Verifica membership per il login e per admin rights
 	requiredLower := strings.ToLower(cfg.LDAPRequiredGroup)
+	adminLower := strings.ToLower(cfg.LDAPAdminGroup)
+
+	hasRequiredGroup := (cfg.LDAPRequiredGroup == "")
+
 	for _, memberOf := range result.Entries[0].GetAttributeValues("memberOf") {
 		memberLower := strings.ToLower(memberOf)
-		if strings.Contains(memberLower, "cn="+requiredLower) ||
-			strings.EqualFold(memberOf, requiredLower) {
-			return true, nil
+
+		// Controllo login group
+		if !hasRequiredGroup && requiredLower != "" {
+			if strings.Contains(memberLower, "cn="+requiredLower) || strings.EqualFold(memberOf, requiredLower) {
+				hasRequiredGroup = true
+			}
+		}
+
+		// Controllo admin group
+		if !isAdmin && adminLower != "" {
+			if strings.Contains(memberLower, "cn="+adminLower) || strings.EqualFold(memberOf, adminLower) {
+				isAdmin = true
+			}
 		}
 	}
 
-	// Utente autenticato ma non nel gruppo richiesto
-	return false, fmt.Errorf("ldap: user %q authenticated but not in group %q", username, cfg.LDAPRequiredGroup)
+	if !hasRequiredGroup {
+		return false, false, fmt.Errorf("ldap: user %q authenticated but not in group %q", username, cfg.LDAPRequiredGroup)
+	}
+
+	return true, isAdmin, nil
 }
 
 // ldapHostname estrae l'hostname dal URL LDAP per la verifica TLS.

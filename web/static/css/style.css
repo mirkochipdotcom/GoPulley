@@ -226,6 +226,53 @@ a:hover {
   border-color: var(--c-accent);
 }
 
+/* Icon-only buttons */
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: background var(--transition), transform 0.1s, opacity var(--transition);
+  opacity: 0.7;
+  flex-shrink: 0;
+  color: var(--c-text-2);
+}
+
+.btn-icon svg {
+  display: block;
+}
+
+.btn-icon:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.08);
+  transform: scale(1.05);
+  color: var(--c-text);
+}
+
+.btn-icon:active {
+  transform: scale(0.95);
+}
+
+.btn-icon-secondary {
+  opacity: 0.6;
+}
+
+.btn-icon-danger {
+  color: var(--c-danger);
+  opacity: 0.95;
+}
+
+.btn-icon-danger:hover {
+  color: #ff6b6b;
+  background: rgba(239, 68, 68, 0.15);
+}
+
 /* ── Spinner ─────────────────────────────────────────────────────── */
 .spinner-ring {
   display: none;
@@ -403,8 +450,14 @@ a:hover {
 }
 
 .file-icon {
-  font-size: 4rem;
   animation: bounce 2s ease-in-out infinite;
+  color: var(--c-text-2);
+}
+
+.file-icon svg {
+  width: 64px;
+  height: 64px;
+  display: block;
 }
 
 @keyframes bounce {
@@ -756,6 +809,84 @@ a:hover {
   border-color: var(--c-accent);
 }
 
+/* Advanced Options */
+.advanced-options-wrap {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.btn-toggle-advanced {
+  background: none;
+  border: none;
+  color: var(--c-text-3);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0;
+  transition: color var(--transition);
+  font-family: inherit;
+}
+
+.btn-toggle-advanced:hover {
+  color: var(--c-accent);
+}
+
+.advanced-options-content {
+  overflow: hidden;
+  max-height: 0;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+}
+
+.advanced-options-content.show {
+  max-height: 200px;
+  opacity: 1;
+  margin-top: 1rem;
+}
+
+.advanced-inputs {
+  display: flex;
+  gap: 1.5rem;
+  padding: 1.25rem;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--c-border-2);
+  border-radius: var(--radius-md);
+}
+
+.input-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.input-group label {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--c-text-2);
+}
+
+.input-group input {
+  background: var(--c-surface);
+  border: 1px solid var(--c-border-2);
+  border-radius: var(--radius-sm);
+  padding: 0.6rem 0.8rem;
+  color: var(--c-text);
+  font-size: 0.9rem;
+  font-family: var(--font);
+  transition: border-color var(--transition), box-shadow var(--transition);
+  outline: none;
+}
+
+.input-group input:focus {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px var(--c-accent-glow);
+}
+
 /* Upload result card */
 .upload-result {
   margin-top: 1rem;
@@ -817,6 +948,7 @@ a:hover {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.875rem;
+  table-layout: auto;
 }
 
 .shares-table th {
@@ -851,26 +983,77 @@ a:hover {
 }
 
 .td-filename {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  max-width: 220px;
+  min-width: 180px;
+  max-width: 400px;
 }
 
-.td-filename {
+.filename-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  line-height: 1.2;
+}
+
+.td-filename .file-icon-sm {
+  flex-shrink: 0;
+  color: var(--c-text-3);
+}
+
+.td-filename .file-icon-sm svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
+.td-filename .filename-text {
   font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .file-icon-sm {
-  font-size: 1rem;
   flex-shrink: 0;
 }
 
 .td-center {
   text-align: center;
+}
+
+.td-size {
+  white-space: nowrap;
+  width: 90px;
+}
+
+.td-expiry {
+  width: 100px;
+}
+
+.td-downloads {
+  width: 50px;
+  font-weight: 500;
+}
+
+.td-actions {
+  width: 140px;
+  text-align: right;
+}
+
+.th-center {
+  text-align: center;
+}
+
+.th-actions {
+  text-align: right;
+}
+
+.share-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
 }
 
 /* Badges */
@@ -900,6 +1083,26 @@ a:hover {
   border: 1px solid rgba(245, 158, 11, 0.28);
 }
 
+.password-lock-badge {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  margin-left: 0.15rem;
+  cursor: help;
+  opacity: 0.75;
+  transition: opacity var(--transition), transform var(--transition);
+  color: #d4a017;
+}
+
+.password-lock-badge svg {
+  display: block;
+}
+
+.password-lock-badge:hover {
+  opacity: 1;
+  transform: scale(1.15);
+}
+
 .sha-inline {
   display: flex;
   align-items: center;
@@ -920,19 +1123,6 @@ a:hover {
   margin-top: 0.75rem;
   font-size: 0.82rem;
   color: var(--c-text-2);
-}
-
-/* Share actions (SHA-256 + Delete buttons) */
-.share-actions {
-  display: flex;
-  gap: 0.3rem;
-  align-items: center;
-}
-
-.btn-secondary {
-  background: var(--c-surface-2);
-  color: var(--c-text);
-  border-color: var(--c-border-2);
 }
 
 /* Version tags */
@@ -1090,4 +1280,44 @@ a.version-badge:hover {
 .auth-logo .brand-name {
   font-size: 1rem;
   color: var(--c-text);
+}
+
+/* Admin icon styles */
+.admin-empty-icon {
+  display: inline-flex;
+  color: var(--c-text-3);
+  opacity: 0.75;
+}
+
+.admin-secret-cell {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-secret-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.admin-secret-lock {
+  display: inline-flex;
+  color: #d4a017;
+}
+
+.admin-password-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 0.25rem;
+  color: #d4a017;
+  opacity: 0.85;
+  cursor: help;
+}
+
+.admin-password-badge svg,
+.admin-secret-lock svg,
+.admin-empty-icon svg {
+  display: block;
 }

@@ -30,6 +30,25 @@
             {{end}}
         </div>
         <div class="nav-user">
+            {{if gt .QuotaMB 0}}
+            <div class="quota-wrap"
+                style="display: flex; align-items: center; gap: 0.5rem; margin-right: 1.5rem; background: rgba(255, 255, 255, 0.05); padding: 0.4rem 0.8rem; border-radius: 99px; border: 1px solid var(--c-border-2);">
+                <span style="font-size: 0.75rem; color: var(--c-text-2);">Spazio: <strong>{{.UsedMB}}MB</strong> /
+                    {{.QuotaMB}}MB</span>
+                <div
+                    style="width: 80px; height: 6px; background: rgba(0,0,0,0.3); border-radius: 99px; overflow: hidden;">
+                    <div {{ printf `style="height: 100%%; background: var(--c-accent); width: %d%%;" ` .QuotaPercent |
+                        safeHTMLAttr }}></div>
+                </div>
+            </div>
+            {{end}}
+
+            {{if .IsAdmin}}
+            <a href="/admin" class="btn btn-ghost" style="margin-right: 0.5rem;">
+                👑 Admin
+            </a>
+            {{end}}
+
             <span class="user-chip">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
@@ -77,24 +96,47 @@
                     <input type="file" id="file-input" name="file" hidden onchange="onFileSelected(this)" />
                 </div>
 
-                <!-- Expiry selector -->
-                <div class="upload-options">
-                    <label class="options-label">Scadenza:</label>
-                    <div class="days-selector">
-                        {{range $d := seq 1 7 30 365}}
-                        {{if le $d $.MaxDays}}
-                        <label class="day-option">
-                            <input type="radio" name="days" value="{{$d}}" {{if eq $d 7}}checked{{end}}>
-                            <span>{{if eq $d 365}}1 anno{{else}}{{$d}}g{{end}}</span>
-                        </label>
-                        {{end}}
-                        {{end}}
-                        <label class="day-option">
-                            <input type="radio" name="days" value="{{$.MaxDays}}">
-                            <span>Max</span>
-                        </label>
+                <!-- Expiry and Advanced Options -->
+                <div class="upload-options"
+                    style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+                    <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
+                        <label class="options-label" style="margin-bottom: 0;">Scadenza limitata:</label>
+                        <div class="days-selector">
+                            {{range $d := seq 1 7 30 365}}
+                            {{if le $d $.MaxDays}}
+                            <label class="day-option">
+                                <input type="radio" name="days" value="{{$d}}" {{if eq $d 7}}checked{{end}}>
+                                <span>{{if eq $d 365}}1 anno{{else}}{{$d}}g{{end}}</span>
+                            </label>
+                            {{end}}
+                            {{end}}
+                            <label class="day-option">
+                                <input type="radio" name="days" value="{{$.MaxDays}}">
+                                <span>Max</span>
+                            </label>
+                        </div>
                     </div>
 
+                    <button type="button" class="btn-toggle-advanced" onclick="toggleAdvancedOptions()"
+                        style="margin-top: 0;">
+                        Opzioni Avanzate <span id="advanced-chevron">+</span>
+                    </button>
+                </div>
+
+                <!-- Advanced Options Panel -->
+                <div id="advanced-options" class="advanced-options-content">
+                    <div class="advanced-inputs">
+                        <div class="input-group">
+                            <label for="password-input">Password di blocco</label>
+                            <input type="password" id="password-input" name="password"
+                                placeholder="Lascia vuoto per disabilitare" autocomplete="new-password">
+                        </div>
+                        <div class="input-group">
+                            <label for="max-downloads">Limite Download</label>
+                            <input type="number" id="max-downloads" name="max_downloads" placeholder="es. 1"
+                                title="Elimina automaticamente il file dopo N download (0 = illimitati)" min="0">
+                        </div>
+                    </div>
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-upload" id="upload-btn" disabled>
@@ -302,6 +344,19 @@
             }
         });
 
+        // ── Advanced options toggle ──────────────────────────────
+        function toggleAdvancedOptions() {
+            const content = document.getElementById('advanced-options');
+            const chevron = document.getElementById('advanced-chevron');
+            if (content.classList.contains('show')) {
+                content.classList.remove('show');
+                chevron.textContent = '+';
+            } else {
+                content.classList.add('show');
+                chevron.textContent = '−';
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', function () {
             // No pending refresh needed with new compact UI
         });
@@ -326,52 +381,83 @@
                 <th>File</th>
                 <th>Dimensione</th>
                 <th>Scadenza</th>
-                <th>Download</th>
-                <th>Link</th>
-                <th></th>
+                <th>DL</th>
+                <th>Azioni</th>
             </tr>
         </thead>
         <tbody>
             {{range .Shares}}
             <tr id="share-{{.Token}}">
                 <td class="td-filename">
-                    <span class="file-icon-sm">{{fileIcon .OriginalName}}</span>
-                    {{.OriginalName}}
+                    <div class="filename-cell">
+                        <span class="file-icon-sm" aria-hidden="true">{{fileIcon .OriginalName}}</span>
+                        <span class="filename-text">{{.OriginalName}}</span>
+                        {{if .PasswordHash}}
+                        <span class="password-lock-badge" title="Protetto da Password" aria-label="Protetto da password">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="10" rx="2" ry="2"></rect>
+                                <path d="M7 11V8a5 5 0 0 1 10 0v3"></path>
+                            </svg>
+                        </span>
+                        {{end}}
+                    </div>
                 </td>
-                <td>{{humanSize .SizeBytes}}</td>
-                <td>
+                <td class="td-size">{{humanSize .SizeBytes}}</td>
+                <td class="td-expiry">
                     {{if isExpired .ExpiresAt}}
                     <span class="badge badge-expired">Scaduto</span>
+                    {{else if isExpiringSoon .ExpiresAt}}
+                    <span class="badge badge-expired">{{daysLeft .ExpiresAt}}</span>
                     {{else}}
                     <span class="badge badge-active">{{daysLeft .ExpiresAt}}</span>
                     {{end}}
                 </td>
-                <td class="td-center">{{.Downloaded}}</td>
-                <td>
-                    {{if not (isExpired .ExpiresAt)}}
-                    <button class="btn btn-xs btn-ghost" onclick="copyShareLink('{{$.BaseURL}}/d/{{.Token}}')">
-                        Copia link
-                    </button>
-                    {{else}}
-                    <span class="text-muted">—</span>
-                    {{end}}
-                </td>
-                <td>
+                <td class="td-center td-downloads">{{.Downloaded}}</td>
+                <td class="td-actions">
                     <div class="share-actions">
+                        {{if not (isExpired .ExpiresAt)}}
+                        <button class="btn-icon" onclick="copyShareLink('{{$.BaseURL}}/d/{{.Token}}')" title="Copia link">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M10 13a5 5 0 0 0 7.07 0l3.54-3.54a5 5 0 1 0-7.07-7.07L11 4"></path>
+                                <path d="M14 11a5 5 0 0 0-7.07 0l-3.54 3.54a5 5 0 1 0 7.07 7.07L13 20"></path>
+                            </svg>
+                        </button>
+                        {{end}}
                         {{if $.EnableSHA}}
                         {{if .SHA256}}
-                        <button class="btn btn-xs btn-ghost" onclick="copyShareSHA256('{{.SHA256}}')" title="{{.SHA256}}">
-                            📋 SHA-256
+                        <button class="btn-icon" onclick="copyShareSHA256('{{.SHA256}}')" title="Copia SHA-256: {{.SHA256}}">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                            </svg>
                         </button>
                         {{else}}
-                        <button class="btn btn-xs btn-secondary" hx-post="/share/{{.Token}}/compute-sha256" hx-target="this" hx-swap="outerHTML">
-                            Calcola
+                        <button class="btn-icon btn-icon-secondary" hx-post="/share/{{.Token}}/compute-sha256"
+                            hx-target="this" hx-swap="outerHTML" title="Calcola SHA-256">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M6 2h12"></path>
+                                <path d="M6 22h12"></path>
+                                <path d="M8 2v6a4 4 0 0 0 2 3.46L12 13l2-1.54A4 4 0 0 0 16 8V2"></path>
+                                <path d="M8 22v-6a4 4 0 0 1 2-3.46L12 11l2 1.54A4 4 0 0 1 16 16v6"></path>
+                            </svg>
                         </button>
                         {{end}}
                         {{end}}
-                        <button class="btn btn-xs btn-danger" hx-delete="/share/{{.Token}}" hx-target="#share-{{.Token}}"
-                            hx-swap="outerHTML swap:0.3s" hx-confirm="Eliminare questa condivisione?">
-                            Elimina
+                        <button class="btn-icon btn-icon-danger" hx-delete="/share/{{.Token}}"
+                            hx-target="#share-{{.Token}}" hx-swap="outerHTML swap:0.3s"
+                            hx-confirm="Eliminare questa condivisione?" title="Elimina">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <polyline points="3 6 5 6 21 6"></polyline>
+                                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path>
+                                <path d="M10 11v6"></path>
+                                <path d="M14 11v6"></path>
+                                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path>
+                            </svg>
                         </button>
                     </div>
                 </td>

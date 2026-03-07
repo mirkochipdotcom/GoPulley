@@ -2,6 +2,7 @@
 
 # Configurazione locale con credenziali — MAI committare!
 .env
+docker-compose.override.yml
 
 # Binario compilato
 gopulley
