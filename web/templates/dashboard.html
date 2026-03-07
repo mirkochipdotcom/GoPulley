@@ -96,7 +96,7 @@
                 </div>
 
                 <!-- Expiry and Advanced Options -->
-                <div class="upload-options"
+                <div class="upload-options" id="upload-options"
                     style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
                         <label class="options-label" style="margin-bottom: 0;">{{t "dashboard.expiry_limited"}}</label>
@@ -116,7 +116,7 @@
                         </div>
                     </div>
 
-                    <button type="button" class="btn-toggle-advanced" onclick="toggleAdvancedOptions()"
+                    <button type="button" class="btn-toggle-advanced" id="btn-toggle-advanced" onclick="toggleAdvancedOptions()"
                         style="margin-top: 0;">
                         {{t "dashboard.advanced_options"}} <span id="advanced-chevron">+</span>
                     </button>
@@ -224,12 +224,14 @@
         }
 
         let pickerOpen = false;
+        let _isUploadBusy = false;
 
         document.getElementById('file-input').addEventListener('click', function (e) {
             e.stopPropagation();
         });
 
         function openFilePicker(e) {
+            if (_isUploadBusy) return;
             if (e && !e.isTrusted) return;
             if (pickerOpen) return;
             showDropLoading();
@@ -254,13 +256,14 @@
             afterPaint(() => {
                 document.getElementById('drop-title').textContent = input.files[0].name;
                 document.getElementById('dropzone').classList.add('has-file');
-                document.getElementById('upload-btn').disabled = false;
+                updateUploadButtonState();
                 hideDropLoading();
             });
         }
 
         function handleDrop(e) {
             e.preventDefault();
+            if (_isUploadBusy) return;
             const zone = document.getElementById('dropzone');
             zone.classList.remove('dragover');
             const files = e.dataTransfer.files;
@@ -275,7 +278,7 @@
                 input.files = dt.files;
                 document.getElementById('drop-title').textContent = fileName;
                 zone.classList.add('has-file');
-                document.getElementById('upload-btn').disabled = false;
+                updateUploadButtonState();
                 hideDropLoading();
             });
         }
@@ -334,17 +337,62 @@
         let _uploadAbortController = null;
         let _currentSession = null;
 
+        function hasSelectedFile() {
+            const input = document.getElementById('file-input');
+            return !!(input && input.files && input.files.length > 0);
+        }
+
+        function updateUploadButtonState() {
+            const btn = document.getElementById('upload-btn');
+            if (!btn) return;
+            btn.disabled = _isUploadBusy || !hasSelectedFile();
+        }
+
         function getSelectedDays() {
             const radio = document.querySelector('input[name="days"]:checked');
             return radio ? parseInt(radio.value, 10) : 7;
         }
 
         function setUploadUIBusy(busy) {
+            _isUploadBusy = busy;
+
             const btn = document.getElementById('upload-btn');
             const cancelBtn = document.getElementById('upload-cancel-btn');
             const spinner = document.getElementById('upload-spinner');
             const icon = document.getElementById('upload-btn-icon');
-            btn.disabled = busy;
+            const dropzone = document.getElementById('dropzone');
+            const uploadOptions = document.getElementById('upload-options');
+            const fileInput = document.getElementById('file-input');
+            const advancedToggle = document.getElementById('btn-toggle-advanced');
+            const dayInputs = document.querySelectorAll('input[name="days"]');
+            const advancedInputs = document.querySelectorAll('#advanced-options input');
+
+            if (dropzone) {
+                dropzone.classList.toggle('is-disabled', busy);
+                dropzone.setAttribute('aria-disabled', busy ? 'true' : 'false');
+            }
+            if (uploadOptions) {
+                uploadOptions.classList.toggle('is-disabled', busy);
+            }
+            if (fileInput) {
+                fileInput.disabled = busy;
+            }
+            dayInputs.forEach((el) => {
+                el.disabled = busy;
+            });
+            if (advancedToggle) {
+                advancedToggle.disabled = busy;
+            }
+            advancedInputs.forEach((el) => {
+                el.disabled = busy;
+            });
+
+            if (busy) {
+                pickerOpen = false;
+                hideDropLoading();
+            }
+
+            updateUploadButtonState();
             if (spinner) spinner.style.display = busy ? 'inline-block' : 'none';
             if (icon) icon.style.display = busy ? 'none' : 'inline';
             if (cancelBtn) cancelBtn.style.display = busy ? 'inline-flex' : 'none';
@@ -354,7 +402,6 @@
             document.getElementById('upload-form').reset();
             document.getElementById('drop-title').textContent = I18N.dragHere;
             document.getElementById('dropzone').classList.remove('has-file');
-            document.getElementById('upload-btn').disabled = true;
             setUploadUIBusy(false);
             hideProgressBar();
             _currentSession = null;
@@ -565,6 +612,7 @@
 
         // ── Advanced options toggle ──────────────────────────────
         function toggleAdvancedOptions() {
+            if (_isUploadBusy) return;
             const content = document.getElementById('advanced-options');
             const chevron = document.getElementById('advanced-chevron');
             if (content.classList.contains('show')) {
