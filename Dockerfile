@@ -15,10 +15,11 @@ COPY . .
 
 # Compile: static binary, strip debug info for minimal size
 # Inject version from VERSION file via ldflags
+ARG VERSION_SUFFIX=""
 RUN VERSION=$(cat /build/VERSION | tr -d '[:space:]') && \
   CGO_ENABLED=1 GOOS=linux \
   go build \
-  -ldflags="-s -w -extldflags '-static' -X main.AppVersion=${VERSION}" \
+  -ldflags="-s -w -extldflags '-static' -X main.AppVersion=${VERSION}${VERSION_SUFFIX}" \
   -trimpath \
   -o gopulley \
   ./cmd/server

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/google/uuid"
 )
@@ -106,4 +107,80 @@ func HumanSize(bytes int64) string {
 	default:
 		return fmt.Sprintf("%d B", bytes)
 	}
+}
+
+// ── Chunked upload helpers ───────────────────────────────────────────────────
+
+// ChunkDir returns the directory where chunks for a session are stored.
+func ChunkDir(uploadDir, session string) string {
+	// Sanitize session to prevent path traversal (session should be a UUID).
+	clean := filepath.Base(session)
+	return filepath.Join(uploadDir, ".chunks", clean)
+}
+
+// ChunkFilePath returns the path for a specific chunk file within a session.
+func ChunkFilePath(uploadDir, session string, index int) string {
+	return filepath.Join(ChunkDir(uploadDir, session), fmt.Sprintf("chunk_%06d", index))
+}
+
+// SaveChunk writes raw bytes to the chunk file for the given session and index.
+// It is idempotent: re-writing an existing chunk overwrites it.
+func SaveChunk(uploadDir, session string, index int, data io.Reader) (int64, error) {
+	dir := ChunkDir(uploadDir, session)
+	if err := os.MkdirAll(dir, 0750); err != nil {
+		return 0, fmt.Errorf("mkdir chunk dir: %w", err)
+	}
+	// Guard against path traversal via session (double-check)
+	chunkPath := ChunkFilePath(uploadDir, session, index)
+	if !strings.HasPrefix(filepath.Clean(chunkPath), filepath.Clean(uploadDir)) {
+		return 0, fmt.Errorf("invalid chunk path: path traversal detected")
+	}
+
+	f, err := os.OpenFile(chunkPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
+	if err != nil {
+		return 0, fmt.Errorf("create chunk file: %w", err)
+	}
+	defer f.Close()
+
+	n, err := io.Copy(f, data)
+	if err != nil {
+		os.Remove(chunkPath)
+		return 0, fmt.Errorf("write chunk: %w", err)
+	}
+	return n, nil
+}
+
+// ComposeChunks assembles totalChunks sequential chunk files from chunkDir into
+// the file at destPath.  destPath is created (or truncated) by this call.
+// The caller is responsible for cleaning up chunk files after a successful compose.
+func ComposeChunks(uploadDir, session string, totalChunks int, destPath string) error {
+	// Guard against path traversal in destPath
+	if !strings.HasPrefix(filepath.Clean(destPath), filepath.Clean(uploadDir)) {
+		return fmt.Errorf("invalid dest path: path traversal detected")
+	}
+
+	dst, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
+	if err != nil {
+		return fmt.Errorf("create dest file: %w", err)
+	}
+	defer dst.Close()
+
+	for i := 0; i < totalChunks; i++ {
+		chunkPath := ChunkFilePath(uploadDir, session, i)
+		cf, err := os.Open(chunkPath)
+		if err != nil {
+			return fmt.Errorf("open chunk %d: %w", i, err)
+		}
+		_, copyErr := io.Copy(dst, cf)
+		cf.Close()
+		if copyErr != nil {
+			return fmt.Errorf("copy chunk %d: %w", i, copyErr)
+		}
+	}
+	return nil
+}
+
+// CleanupChunkDir removes the entire chunk directory for a session.
+func CleanupChunkDir(uploadDir, session string) error {
+	return os.RemoveAll(ChunkDir(uploadDir, session))
 }
