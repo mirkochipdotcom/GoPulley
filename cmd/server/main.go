@@ -755,371 +755,370 @@ func (a *App) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 type jsonObj = map[string]any
 
 func jsonResponse(w http.ResponseWriter, status int, obj jsonObj) {
-w.Header().Set("Content-Type", "application/json")
-w.WriteHeader(status)
-if err := json.NewEncoder(w).Encode(obj); err != nil {
-log.Printf("json encode: %v", err)
-}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(obj); err != nil {
+		log.Printf("json encode: %v", err)
+	}
 }
 
 // jsonDecode decodes the JSON body of r into v (1 MB limit).
 func jsonDecode(r *http.Request, v any) error {
-r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
-return json.NewDecoder(r.Body).Decode(v)
+	r.Body = http.MaxBytesReader(nil, r.Body, 1<<20)
+	return json.NewDecoder(r.Body).Decode(v)
 }
 
 // POST /api/check-upload
 // Body (JSON): { "filename": "...", "size": 12345678 }
 func (a *App) handleCheckUpload(w http.ResponseWriter, r *http.Request) {
-if r.Method != http.MethodPost {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-username := a.getUsername(r)
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	username := a.getUsername(r)
 
-var req struct {
-Filename string `json:"filename"`
-Size     int64  `json:"size"`
-}
-if err := jsonDecode(r, &req); err != nil {
-jsonResponse(w, http.StatusBadRequest, jsonObj{"ok": false, "reason": "bad_request"})
-return
-}
+	var req struct {
+		Filename string `json:"filename"`
+		Size     int64  `json:"size"`
+	}
+	if err := jsonDecode(r, &req); err != nil {
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"ok": false, "reason": "bad_request"})
+		return
+	}
 
-maxBytes := a.cfg.MaxUploadSizeMB * 1024 * 1024
-if req.Size > maxBytes {
-jsonResponse(w, http.StatusRequestEntityTooLarge, jsonObj{"ok": false, "reason": "file_too_large"})
-return
-}
+	maxBytes := a.cfg.MaxUploadSizeMB * 1024 * 1024
+	if req.Size > maxBytes {
+		jsonResponse(w, http.StatusRequestEntityTooLarge, jsonObj{"ok": false, "reason": "file_too_large"})
+		return
+	}
 
-if a.cfg.UserQuotaMB > 0 {
-usedBytes, err := a.db.GetUserTotalBytes(username)
-if err != nil {
-log.Printf("check-upload quota: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"ok": false, "reason": "server_error"})
-return
-}
-if usedBytes+req.Size > a.cfg.UserQuotaMB*1024*1024 {
-jsonResponse(w, http.StatusForbidden, jsonObj{"ok": false, "reason": "quota_exceeded"})
-return
-}
-}
+	if a.cfg.UserQuotaMB > 0 {
+		usedBytes, err := a.db.GetUserTotalBytes(username)
+		if err != nil {
+			log.Printf("check-upload quota: %v", err)
+			jsonResponse(w, http.StatusInternalServerError, jsonObj{"ok": false, "reason": "server_error"})
+			return
+		}
+		if usedBytes+req.Size > a.cfg.UserQuotaMB*1024*1024 {
+			jsonResponse(w, http.StatusForbidden, jsonObj{"ok": false, "reason": "quota_exceeded"})
+			return
+		}
+	}
 
-jsonResponse(w, http.StatusOK, jsonObj{"ok": true})
+	jsonResponse(w, http.StatusOK, jsonObj{"ok": true})
 }
 
 // POST /api/upload/init
 // Body (JSON): { "filename":"...", "size":12345678, "total_chunks":10, "chunk_size":10485760, "days":7, "password":"", "max_downloads":0 }
 func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
-if r.Method != http.MethodPost {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-username := a.getUsername(r)
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	username := a.getUsername(r)
 
-var req struct {
-Filename     string `json:"filename"`
-Size         int64  `json:"size"`
-TotalChunks  int    `json:"total_chunks"`
-ChunkSize    int64  `json:"chunk_size"`
-Days         int    `json:"days"`
-Password     string `json:"password"`
-MaxDownloads int    `json:"max_downloads"`
-}
-if err := jsonDecode(r, &req); err != nil {
-jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "bad_request"})
-return
-}
+	var req struct {
+		Filename     string `json:"filename"`
+		Size         int64  `json:"size"`
+		TotalChunks  int    `json:"total_chunks"`
+		ChunkSize    int64  `json:"chunk_size"`
+		Days         int    `json:"days"`
+		Password     string `json:"password"`
+		MaxDownloads int    `json:"max_downloads"`
+	}
+	if err := jsonDecode(r, &req); err != nil {
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "bad_request"})
+		return
+	}
 
-// Sanitize filename
-req.Filename = filepath.Base(req.Filename)
-if req.Filename == "." || req.Filename == "" {
-jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_filename"})
-return
-}
+	// Sanitize filename
+	req.Filename = filepath.Base(req.Filename)
+	if req.Filename == "." || req.Filename == "" {
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_filename"})
+		return
+	}
 
-if req.Days < 1 || req.Days > a.cfg.MaxGlobalDays {
-jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_days"})
-return
-}
-if req.MaxDownloads < 0 {
-req.MaxDownloads = 0
-}
-if req.TotalChunks < 1 || req.ChunkSize < 1 {
-jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_chunk_params"})
-return
-}
+	if req.Days < 1 || req.Days > a.cfg.MaxGlobalDays {
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_days"})
+		return
+	}
+	if req.MaxDownloads < 0 {
+		req.MaxDownloads = 0
+	}
+	if req.TotalChunks < 1 || req.ChunkSize < 1 {
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_chunk_params"})
+		return
+	}
 
-// Limit concurrent upload sessions per user
-count, err := a.db.CountActiveUploadSessionsByUser(username)
-if err != nil {
-log.Printf("upload init count sessions: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-return
-}
-if count >= a.cfg.MaxUploadSessionsPerUser {
-jsonResponse(w, http.StatusTooManyRequests, jsonObj{"error": "too_many_sessions"})
-return
-}
+	// Limit concurrent upload sessions per user
+	count, err := a.db.CountActiveUploadSessionsByUser(username)
+	if err != nil {
+		log.Printf("upload init count sessions: %v", err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
+	if count >= a.cfg.MaxUploadSessionsPerUser {
+		jsonResponse(w, http.StatusTooManyRequests, jsonObj{"error": "too_many_sessions"})
+		return
+	}
 
-if a.cfg.UserQuotaMB > 0 {
-usedBytes, err := a.db.GetUserTotalBytes(username)
-if err != nil {
-log.Printf("upload init quota: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-return
-}
-if usedBytes+req.Size > a.cfg.UserQuotaMB*1024*1024 {
-jsonResponse(w, http.StatusForbidden, jsonObj{"error": "quota_exceeded"})
-return
-}
-}
+	if a.cfg.UserQuotaMB > 0 {
+		usedBytes, err := a.db.GetUserTotalBytes(username)
+		if err != nil {
+			log.Printf("upload init quota: %v", err)
+			jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+			return
+		}
+		if usedBytes+req.Size > a.cfg.UserQuotaMB*1024*1024 {
+			jsonResponse(w, http.StatusForbidden, jsonObj{"error": "quota_exceeded"})
+			return
+		}
+	}
 
-var passwordHash string
-if req.Password != "" {
-hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-if err != nil {
-log.Printf("bcrypt init: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-return
-}
-passwordHash = string(hash)
-}
+	var passwordHash string
+	if req.Password != "" {
+		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		if err != nil {
+			log.Printf("bcrypt init: %v", err)
+			jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+			return
+		}
+		passwordHash = string(hash)
+	}
 
-sessionToken := uuid.New().String()
-expiresAt := time.Now().UTC().Add(time.Duration(a.cfg.UploadSessionTTLHours) * time.Hour)
+	sessionToken := uuid.New().String()
+	expiresAt := time.Now().UTC().Add(time.Duration(a.cfg.UploadSessionTTLHours) * time.Hour)
 
-if err := os.MkdirAll(storage.ChunkDir(a.cfg.UploadDir, sessionToken), 0750); err != nil {
-log.Printf("upload init mkdir: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-return
-}
+	if err := os.MkdirAll(storage.ChunkDir(a.cfg.UploadDir, sessionToken), 0750); err != nil {
+		log.Printf("upload init mkdir: %v", err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
 
-_, err = a.db.CreateUploadSession(sessionToken, username, req.Filename, req.Size, req.TotalChunks, req.ChunkSize, expiresAt, req.Days, passwordHash, req.MaxDownloads)
-if err != nil {
-log.Printf("upload init db: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-return
-}
+	_, err = a.db.CreateUploadSession(sessionToken, username, req.Filename, req.Size, req.TotalChunks, req.ChunkSize, expiresAt, req.Days, passwordHash, req.MaxDownloads)
+	if err != nil {
+		log.Printf("upload init db: %v", err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
 
-jsonResponse(w, http.StatusOK, jsonObj{
-"session":      sessionToken,
-"chunk_size":   req.ChunkSize,
-"total_chunks": req.TotalChunks,
-})
+	jsonResponse(w, http.StatusOK, jsonObj{
+		"session":      sessionToken,
+		"chunk_size":   req.ChunkSize,
+		"total_chunks": req.TotalChunks,
+	})
 }
 
 // GET /api/upload/{session}/status
 func (a *App) handleUploadStatus(w http.ResponseWriter, r *http.Request, sessionToken string) {
-username := a.getUsername(r)
+	username := a.getUsername(r)
 
-sess, err := a.db.GetUploadSession(sessionToken)
-if err != nil {
-jsonResponse(w, http.StatusNotFound, jsonObj{"error": "session_not_found"})
-return
-}
-if sess.Uploader != username {
-jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
-return
-}
+	sess, err := a.db.GetUploadSession(sessionToken)
+	if err != nil {
+		jsonResponse(w, http.StatusNotFound, jsonObj{"error": "session_not_found"})
+		return
+	}
+	if sess.Uploader != username {
+		jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
+		return
+	}
 
-done := sess.DoneChunkList()
-var bytesReceived int64
-for _, idx := range done {
-if idx < sess.TotalChunks-1 {
-bytesReceived += sess.ChunkSize
-} else {
-remainder := sess.TotalSize - sess.ChunkSize*int64(sess.TotalChunks-1)
-if remainder > 0 {
-bytesReceived += remainder
-} else {
-bytesReceived += sess.ChunkSize
-}
-}
-}
+	done := sess.DoneChunkList()
+	var bytesReceived int64
+	for _, idx := range done {
+		if idx < sess.TotalChunks-1 {
+			bytesReceived += sess.ChunkSize
+		} else {
+			remainder := sess.TotalSize - sess.ChunkSize*int64(sess.TotalChunks-1)
+			if remainder > 0 {
+				bytesReceived += remainder
+			} else {
+				bytesReceived += sess.ChunkSize
+			}
+		}
+	}
 
-jsonResponse(w, http.StatusOK, jsonObj{
-"session":         sessionToken,
-"total_chunks":    sess.TotalChunks,
-"chunk_size":      sess.ChunkSize,
-"bytes_received":  bytesReceived,
-"chunks_received": done,
-})
+	jsonResponse(w, http.StatusOK, jsonObj{
+		"session":         sessionToken,
+		"total_chunks":    sess.TotalChunks,
+		"chunk_size":      sess.ChunkSize,
+		"bytes_received":  bytesReceived,
+		"chunks_received": done,
+	})
 }
 
 // POST /api/upload/{session}/chunk/{index}
 // Body: raw chunk bytes (Content-Type: application/octet-stream)
 func (a *App) handleUploadChunk(w http.ResponseWriter, r *http.Request, sessionToken string, chunkIndex int) {
-if r.Method != http.MethodPost {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-username := a.getUsername(r)
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	username := a.getUsername(r)
 
-sess, err := a.db.GetUploadSession(sessionToken)
-if err != nil {
-jsonResponse(w, http.StatusNotFound, jsonObj{"error": "session_not_found"})
-return
-}
-if sess.Uploader != username {
-jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
-return
-}
-if chunkIndex < 0 || chunkIndex >= sess.TotalChunks {
-jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_chunk_index"})
-return
-}
+	sess, err := a.db.GetUploadSession(sessionToken)
+	if err != nil {
+		jsonResponse(w, http.StatusNotFound, jsonObj{"error": "session_not_found"})
+		return
+	}
+	if sess.Uploader != username {
+		jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
+		return
+	}
+	if chunkIndex < 0 || chunkIndex >= sess.TotalChunks {
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_chunk_index"})
+		return
+	}
 
-expectedSize := sess.ChunkSize
-if chunkIndex == sess.TotalChunks-1 {
-remainder := sess.TotalSize - sess.ChunkSize*int64(sess.TotalChunks-1)
-if remainder > 0 {
-expectedSize = remainder
-}
-}
+	expectedSize := sess.ChunkSize
+	if chunkIndex == sess.TotalChunks-1 {
+		remainder := sess.TotalSize - sess.ChunkSize*int64(sess.TotalChunks-1)
+		if remainder > 0 {
+			expectedSize = remainder
+		}
+	}
 
-limited := http.MaxBytesReader(w, r.Body, expectedSize+1)
+	limited := http.MaxBytesReader(w, r.Body, expectedSize+1)
 
-bytesWritten, err := storage.SaveChunk(a.cfg.UploadDir, sessionToken, chunkIndex, limited)
-if err != nil {
-log.Printf("save chunk %s[%d]: %v", sessionToken, chunkIndex, err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "write_error"})
-return
-}
-if bytesWritten > expectedSize {
-os.Remove(storage.ChunkFilePath(a.cfg.UploadDir, sessionToken, chunkIndex))
-jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "chunk_too_large"})
-return
-}
+	bytesWritten, err := storage.SaveChunk(a.cfg.UploadDir, sessionToken, chunkIndex, limited)
+	if err != nil {
+		log.Printf("save chunk %s[%d]: %v", sessionToken, chunkIndex, err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "write_error"})
+		return
+	}
+	if bytesWritten > expectedSize {
+		os.Remove(storage.ChunkFilePath(a.cfg.UploadDir, sessionToken, chunkIndex))
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "chunk_too_large"})
+		return
+	}
 
-if err := a.db.MarkChunkReceived(sessionToken, chunkIndex); err != nil {
-log.Printf("mark chunk %s[%d]: %v", sessionToken, chunkIndex, err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "db_error"})
-return
-}
+	if err := a.db.MarkChunkReceived(sessionToken, chunkIndex); err != nil {
+		log.Printf("mark chunk %s[%d]: %v", sessionToken, chunkIndex, err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "db_error"})
+		return
+	}
 
-jsonResponse(w, http.StatusOK, jsonObj{
-"index":         chunkIndex,
-"bytes_written": bytesWritten,
-})
+	jsonResponse(w, http.StatusOK, jsonObj{
+		"index":         chunkIndex,
+		"bytes_written": bytesWritten,
+	})
 }
 
 // POST /api/upload/{session}/complete
 func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessionToken string) {
-if r.Method != http.MethodPost {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-username := a.getUsername(r)
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	username := a.getUsername(r)
 
-sess, err := a.db.GetUploadSession(sessionToken)
-if err != nil {
-jsonResponse(w, http.StatusNotFound, jsonObj{"error": "session_not_found"})
-return
-}
-if sess.Uploader != username {
-jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
-return
-}
+	sess, err := a.db.GetUploadSession(sessionToken)
+	if err != nil {
+		jsonResponse(w, http.StatusNotFound, jsonObj{"error": "session_not_found"})
+		return
+	}
+	if sess.Uploader != username {
+		jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
+		return
+	}
 
-done := sess.DoneChunkList()
-if len(done) != sess.TotalChunks {
-jsonResponse(w, http.StatusConflict, jsonObj{"error": "missing_chunks"})
-return
-}
+	done := sess.DoneChunkList()
+	if len(done) != sess.TotalChunks {
+		jsonResponse(w, http.StatusConflict, jsonObj{"error": "missing_chunks"})
+		return
+	}
 
-if err := os.MkdirAll(a.cfg.UploadDir, 0750); err != nil {
-log.Printf("complete mkdir: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-return
-}
+	if err := os.MkdirAll(a.cfg.UploadDir, 0750); err != nil {
+		log.Printf("complete mkdir: %v", err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
 
-destDir := filepath.Join(a.cfg.UploadDir, uuid.New().String())
-if err := os.MkdirAll(destDir, 0750); err != nil {
-log.Printf("complete mkdir dest: %v", err)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-return
-}
-destPath := filepath.Join(destDir, sess.OriginalName)
+	destDir := filepath.Join(a.cfg.UploadDir, uuid.New().String())
+	if err := os.MkdirAll(destDir, 0750); err != nil {
+		log.Printf("complete mkdir dest: %v", err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
+	destPath := filepath.Join(destDir, sess.OriginalName)
 
-if err := storage.ComposeChunks(a.cfg.UploadDir, sessionToken, sess.TotalChunks, destPath); err != nil {
-log.Printf("compose chunks %s: %v", sessionToken, err)
-os.RemoveAll(destDir)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "compose_error"})
-return
-}
+	if err := storage.ComposeChunks(a.cfg.UploadDir, sessionToken, sess.TotalChunks, destPath); err != nil {
+		log.Printf("compose chunks %s: %v", sessionToken, err)
+		os.RemoveAll(destDir)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "compose_error"})
+		return
+	}
 
-shareToken := uuid.New().String()
-expiresAt := time.Now().UTC().Add(time.Duration(sess.Days) * 24 * time.Hour)
+	shareToken := uuid.New().String()
+	expiresAt := time.Now().UTC().Add(time.Duration(sess.Days) * 24 * time.Hour)
 
-share, err := a.db.CreateShare(shareToken, destPath, sess.OriginalName, sess.TotalSize, username, expiresAt, "", sess.PasswordHash, sess.MaxDownloads)
-if err != nil {
-log.Printf("complete create share %s: %v", sessionToken, err)
-os.RemoveAll(destDir)
-jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "db_error"})
-return
-}
+	share, err := a.db.CreateShare(shareToken, destPath, sess.OriginalName, sess.TotalSize, username, expiresAt, "", sess.PasswordHash, sess.MaxDownloads)
+	if err != nil {
+		log.Printf("complete create share %s: %v", sessionToken, err)
+		os.RemoveAll(destDir)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "db_error"})
+		return
+	}
 
-if a.cfg.EnableSHA256 {
-go func(token, path string) {
-hash, err := storage.ComputeSHA256(path)
-if err != nil {
-log.Printf("compute sha256 async chunked (%s): %v", token, err)
-return
-}
-if err := a.db.SetShareSHA256(token, hash); err != nil {
-log.Printf("store sha256 async chunked (%s): %v", token, err)
-}
-}(shareToken, destPath)
-}
+	if a.cfg.EnableSHA256 {
+		go func(token, path string) {
+			hash, err := storage.ComputeSHA256(path)
+			if err != nil {
+				log.Printf("compute sha256 async chunked (%s): %v", token, err)
+				return
+			}
+			if err := a.db.SetShareSHA256(token, hash); err != nil {
+				log.Printf("store sha256 async chunked (%s): %v", token, err)
+			}
+		}(shareToken, destPath)
+	}
 
-// Cleanup chunks (best-effort)
-if err := storage.CleanupChunkDir(a.cfg.UploadDir, sessionToken); err != nil {
-log.Printf("cleanup chunks %s: %v", sessionToken, err)
-}
-if err := a.db.DeleteUploadSession(sessionToken); err != nil {
-log.Printf("delete upload session %s: %v", sessionToken, err)
-}
+	// Cleanup chunks (best-effort)
+	if err := storage.CleanupChunkDir(a.cfg.UploadDir, sessionToken); err != nil {
+		log.Printf("cleanup chunks %s: %v", sessionToken, err)
+	}
+	if err := a.db.DeleteUploadSession(sessionToken); err != nil {
+		log.Printf("delete upload session %s: %v", sessionToken, err)
+	}
 
-downloadURL := fmt.Sprintf("%s/d/%s", a.publicBaseURL(r), share.Token)
-jsonResponse(w, http.StatusOK, jsonObj{
-"token":        shareToken,
-"download_url": downloadURL,
-"filename":     sess.OriginalName,
-"size":         sess.TotalSize,
-"days":         sess.Days,
-})
+	downloadURL := fmt.Sprintf("%s/d/%s", a.publicBaseURL(r), share.Token)
+	jsonResponse(w, http.StatusOK, jsonObj{
+		"token":        shareToken,
+		"download_url": downloadURL,
+		"filename":     sess.OriginalName,
+		"size":         sess.TotalSize,
+		"days":         sess.Days,
+	})
 }
 
 // DELETE /api/upload/{session}
 func (a *App) handleUploadAbort(w http.ResponseWriter, r *http.Request, sessionToken string) {
-if r.Method != http.MethodDelete {
-http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-return
-}
-username := a.getUsername(r)
+	if r.Method != http.MethodDelete {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	username := a.getUsername(r)
 
-sess, err := a.db.GetUploadSession(sessionToken)
-if err != nil {
-// Already deleted or never existed — treat as success
-w.WriteHeader(http.StatusNoContent)
-return
-}
-if sess.Uploader != username {
-jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
-return
-}
+	sess, err := a.db.GetUploadSession(sessionToken)
+	if err != nil {
+		// Already deleted or never existed — treat as success
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if sess.Uploader != username {
+		jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
+		return
+	}
 
-if err := storage.CleanupChunkDir(a.cfg.UploadDir, sessionToken); err != nil {
-log.Printf("abort cleanup %s: %v", sessionToken, err)
-}
-if err := a.db.DeleteUploadSession(sessionToken); err != nil {
-log.Printf("abort delete session %s: %v", sessionToken, err)
-}
+	if err := storage.CleanupChunkDir(a.cfg.UploadDir, sessionToken); err != nil {
+		log.Printf("abort cleanup %s: %v", sessionToken, err)
+	}
+	if err := a.db.DeleteUploadSession(sessionToken); err != nil {
+		log.Printf("abort delete session %s: %v", sessionToken, err)
+	}
 
-w.WriteHeader(http.StatusNoContent)
+	w.WriteHeader(http.StatusNoContent)
 }
-
 
 // ── Cleanup goroutine ─────────────────────────────────────────────────────────
 

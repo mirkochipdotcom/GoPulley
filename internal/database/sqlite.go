@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -419,11 +420,6 @@ func (s *UploadSession) DoneChunkList() []int {
 	for i := range m {
 		list = append(list, i)
 	}
-	// Sort ascending
-	for i := 1; i < len(list); i++ {
-		for j := i; j > 0 && list[j] < list[j-1]; j-- {
-			list[j], list[j-1] = list[j-1], list[j]
-		}
-	}
+	sort.Ints(list)
 	return list
 }
