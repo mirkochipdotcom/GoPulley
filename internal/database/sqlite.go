@@ -3,6 +3,7 @@ package database
 import (
 	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,6 +22,23 @@ type Share struct {
 	ExpiresAt    time.Time
 	Downloaded   int
 	SHA256       string
+	PasswordHash string
+	MaxDownloads int
+}
+
+// UploadSession represents an in-progress chunked upload.
+type UploadSession struct {
+	SessionToken string
+	Uploader     string
+	OriginalName string
+	TotalSize    int64
+	TotalChunks  int
+	ChunkSize    int64
+	// ChunksDone is a comma-separated list of received chunk indices (e.g. "0,1,3").
+	ChunksDone   string
+	CreatedAt    time.Time
+	ExpiresAt    time.Time
+	Days         int
 	PasswordHash string
 	MaxDownloads int
 }
@@ -84,6 +102,30 @@ func migrate(conn *sql.DB) error {
 			return fmt.Errorf("add max_downloads column: %w", err)
 		}
 	}
+
+	// uploads_in_progress: tracks chunked upload sessions.
+	_, err = conn.Exec(`
+		CREATE TABLE IF NOT EXISTS uploads_in_progress (
+			session_token  TEXT     NOT NULL PRIMARY KEY,
+			uploader       TEXT     NOT NULL,
+			original_name  TEXT     NOT NULL,
+			total_size     INTEGER  NOT NULL DEFAULT 0,
+			total_chunks   INTEGER  NOT NULL DEFAULT 0,
+			chunk_size     INTEGER  NOT NULL DEFAULT 0,
+			chunks_done    TEXT     NOT NULL DEFAULT '',
+			created_at     DATETIME NOT NULL,
+			expires_at     DATETIME NOT NULL,
+			days           INTEGER  NOT NULL DEFAULT 7,
+			password_hash  TEXT     NOT NULL DEFAULT '',
+			max_downloads  INTEGER  NOT NULL DEFAULT 0
+		);
+		CREATE INDEX IF NOT EXISTS idx_uip_uploader  ON uploads_in_progress(uploader);
+		CREATE INDEX IF NOT EXISTS idx_uip_expires   ON uploads_in_progress(expires_at);
+	`)
+	if err != nil {
+		return fmt.Errorf("create uploads_in_progress table: %w", err)
+	}
+
 	return nil
 }
 
@@ -242,4 +284,146 @@ func scanShareRow(rows *sql.Rows) (*Share, error) {
 		return nil, err
 	}
 	return s, nil
+}
+
+// ── Upload session CRUD ──────────────────────────────────────────────────────
+
+// CreateUploadSession inserts a new in-progress upload session.
+func (db *DB) CreateUploadSession(sessionToken, uploader, originalName string, totalSize int64, totalChunks int, chunkSize int64, expiresAt time.Time, days int, passwordHash string, maxDownloads int) (*UploadSession, error) {
+	now := time.Now().UTC()
+	_, err := db.conn.Exec(
+		`INSERT INTO uploads_in_progress
+		 (session_token, uploader, original_name, total_size, total_chunks, chunk_size, chunks_done, created_at, expires_at, days, password_hash, max_downloads)
+		 VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, ?)`,
+		sessionToken, uploader, originalName, totalSize, totalChunks, chunkSize, now, expiresAt.UTC(), days, passwordHash, maxDownloads,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("create upload session: %w", err)
+	}
+	return &UploadSession{
+		SessionToken: sessionToken,
+		Uploader:     uploader,
+		OriginalName: originalName,
+		TotalSize:    totalSize,
+		TotalChunks:  totalChunks,
+		ChunkSize:    chunkSize,
+		ChunksDone:   "",
+		CreatedAt:    now,
+		ExpiresAt:    expiresAt.UTC(),
+		Days:         days,
+		PasswordHash: passwordHash,
+		MaxDownloads: maxDownloads,
+	}, nil
+}
+
+// GetUploadSession retrieves an in-progress upload session by its token.
+func (db *DB) GetUploadSession(sessionToken string) (*UploadSession, error) {
+	row := db.conn.QueryRow(
+		`SELECT session_token, uploader, original_name, total_size, total_chunks, chunk_size, chunks_done, created_at, expires_at, days, password_hash, max_downloads
+		 FROM uploads_in_progress WHERE session_token = ?`, sessionToken)
+	s := &UploadSession{}
+	err := row.Scan(&s.SessionToken, &s.Uploader, &s.OriginalName, &s.TotalSize, &s.TotalChunks, &s.ChunkSize,
+		&s.ChunksDone, &s.CreatedAt, &s.ExpiresAt, &s.Days, &s.PasswordHash, &s.MaxDownloads)
+	if err != nil {
+		return nil, err
+	}
+	return s, nil
+}
+
+// MarkChunkReceived appends the given chunk index to the chunks_done list (idempotent).
+func (db *DB) MarkChunkReceived(sessionToken string, index int) error {
+	s, err := db.GetUploadSession(sessionToken)
+	if err != nil {
+		return fmt.Errorf("get session for mark: %w", err)
+	}
+	// Parse existing indices
+	existing := parseDoneChunks(s.ChunksDone)
+	if _, ok := existing[index]; ok {
+		return nil // already recorded — idempotent
+	}
+	existing[index] = struct{}{}
+	newDone := encodeDoneChunks(existing)
+	_, err = db.conn.Exec(`UPDATE uploads_in_progress SET chunks_done = ? WHERE session_token = ?`, newDone, sessionToken)
+	return err
+}
+
+// CountActiveUploadSessionsByUser returns the number of active (non-expired) upload sessions for a user.
+func (db *DB) CountActiveUploadSessionsByUser(uploader string) (int, error) {
+	var count int
+	err := db.conn.QueryRow(
+		`SELECT COUNT(*) FROM uploads_in_progress WHERE uploader = ? AND expires_at > ?`,
+		uploader, time.Now().UTC(),
+	).Scan(&count)
+	return count, err
+}
+
+// GetStaleUploadSessions returns upload sessions whose expires_at is in the past.
+func (db *DB) GetStaleUploadSessions() ([]*UploadSession, error) {
+	rows, err := db.conn.Query(
+		`SELECT session_token, uploader, original_name, total_size, total_chunks, chunk_size, chunks_done, created_at, expires_at, days, password_hash, max_downloads
+		 FROM uploads_in_progress WHERE expires_at < ?`, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []*UploadSession
+	for rows.Next() {
+		s := &UploadSession{}
+		if err := rows.Scan(&s.SessionToken, &s.Uploader, &s.OriginalName, &s.TotalSize, &s.TotalChunks, &s.ChunkSize,
+			&s.ChunksDone, &s.CreatedAt, &s.ExpiresAt, &s.Days, &s.PasswordHash, &s.MaxDownloads); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, rows.Err()
+}
+
+// DeleteUploadSession removes an in-progress upload session record.
+func (db *DB) DeleteUploadSession(sessionToken string) error {
+	_, err := db.conn.Exec(`DELETE FROM uploads_in_progress WHERE session_token = ?`, sessionToken)
+	return err
+}
+
+// ── Done-chunks encoding helpers ─────────────────────────────────────────────
+
+func parseDoneChunks(s string) map[int]struct{} {
+	m := make(map[int]struct{})
+	if s == "" {
+		return m
+	}
+	for _, part := range strings.Split(s, ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if i, err := strconv.Atoi(part); err == nil {
+			m[i] = struct{}{}
+		}
+	}
+	return m
+}
+
+func encodeDoneChunks(m map[int]struct{}) string {
+	parts := make([]string, 0, len(m))
+	for i := range m {
+		parts = append(parts, strconv.Itoa(i))
+	}
+	return strings.Join(parts, ",")
+}
+
+// DoneChunkList converts the ChunksDone string into a sorted slice of indices.
+func (s *UploadSession) DoneChunkList() []int {
+	m := parseDoneChunks(s.ChunksDone)
+	list := make([]int, 0, len(m))
+	for i := range m {
+		list = append(list, i)
+	}
+	// Sort ascending
+	for i := 1; i < len(list); i++ {
+		for j := i; j > 0 && list[j] < list[j-1]; j-- {
+			list[j], list[j-1] = list[j-1], list[j]
+		}
+	}
+	return list
 }

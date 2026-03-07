@@ -68,8 +68,7 @@
         <section class="upload-section">
             <h2 class="section-title">Carica un file</h2>
 
-            <form id="upload-form" hx-post="/upload" hx-target="#upload-result" hx-swap="innerHTML"
-                hx-encoding="multipart/form-data" hx-indicator="#upload-spinner" enctype="multipart/form-data">
+            <form id="upload-form" onsubmit="return false;">
 
                 <!-- Drag & Drop zone -->
                 <div class="dropzone" id="dropzone" onclick="openFilePicker(event)"
@@ -139,16 +138,21 @@
                     </div>
                 </div>
 
-                <button type="submit" class="btn btn-primary btn-upload" id="upload-btn" disabled>
-                    <span id="upload-spinner" class="htmx-indicator spinner-ring"></span>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                        stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="17 8 12 3 7 8" />
-                        <line x1="12" y1="3" x2="12" y2="15" />
-                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-                    </svg>
-                    Carica
-                </button>
+                <div style="display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-primary btn-upload" id="upload-btn" disabled
+                        onclick="startChunkedUpload()">
+                        <span id="upload-spinner" class="spinner-ring" style="display:none;"></span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round" id="upload-btn-icon">
+                            <polyline points="17 8 12 3 7 8" />
+                            <line x1="12" y1="3" x2="12" y2="15" />
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                        </svg>
+                        Carica
+                    </button>
+                    <button type="button" class="btn btn-ghost" id="upload-cancel-btn" style="display:none;"
+                        onclick="cancelUpload()">Annulla</button>
+                </div>
 
                 <!-- Upload progress bar -->
                 <div class="upload-progress-wrap" id="upload-progress-wrap" aria-hidden="true">
@@ -157,7 +161,7 @@
                 </div>
             </form>
 
-            <!-- HTMX upload result -->
+            <!-- Upload result -->
             <div id="upload-result"></div>
         </section>
 
@@ -193,30 +197,20 @@
             requestAnimationFrame(() => requestAnimationFrame(fn));
         }
 
-        // ── File picker via click ─────────────────────────────────
-        // Mostriamo il loading PRIMA che la dialog si apra (nel click),
-        // così non c'è freeze visibile. Se l'utente annulla, lo nasconde
-        // il listener sul focus della window.
         let pickerOpen = false;
 
-        // Impedisce che il click sintetico su file-input faccia bubbling
-        // al dropzone (che chiamerebbe openFilePicker() ricorsivamente).
         document.getElementById('file-input').addEventListener('click', function (e) {
             e.stopPropagation();
         });
 
         function openFilePicker(e) {
-            // Ignora click sintetici: evita rientro quando viene chiamato fileInput.click().
             if (e && !e.isTrusted) return;
-            if (pickerOpen) return;   // guard anti-rientro
+            if (pickerOpen) return;
             showDropLoading();
             pickerOpen = true;
             document.getElementById('file-input').click();
         }
 
-        // Quando la dialog si chiude (conferma O annulla) la window
-        // riceve il focus. Se non è stato selezionato nessun file,
-        // nascondiamo il loading dopo un breve attimo.
         window.addEventListener('focus', function onWinFocus() {
             if (!pickerOpen) return;
             setTimeout(() => {
@@ -231,7 +225,6 @@
         function onFileSelected(input) {
             if (input.files.length === 0) return;
             pickerOpen = false;
-            // Loading già visibile dal click — aggiorniamo il DOM nel prossimo paint
             afterPaint(() => {
                 document.getElementById('drop-title').textContent = input.files[0].name;
                 document.getElementById('dropzone').classList.add('has-file');
@@ -260,9 +253,6 @@
                 hideDropLoading();
             });
         }
-
-        // ── Days selector ────────────────────────────────────────
-        // (nessuna logica custom necessaria — tutti i valori sono radio fissi)
 
         // ── Copy link ────────────────────────────────────────────
         function copyLink() {
@@ -310,26 +300,229 @@
             setTimeout(() => setProgress(0), 300);
         }
 
-        // htmx:beforeSend: l'XHR esiste ma non è ancora partito.
-        // Aggiungiamo upload.onprogress per tracciare il vero avanzamento del file.
-        // Cap al 95%: il 100% scatta solo quando il server risponde davvero.
-        document.body.addEventListener('htmx:beforeSend', function (e) {
-            if (!e.detail.elt || e.detail.elt.id !== 'upload-form') return;
-            showProgressBar();
-            const xhr = e.detail.xhr;
-            xhr.upload.onprogress = function (evt) {
-                if (!evt.lengthComputable) return;
-                const pct = Math.min(95, Math.round(evt.loaded / evt.total * 100));
-                setProgress(pct);
-            };
-        });
+        // ── Chunked upload orchestrator ───────────────────────────
+        const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+        const MAX_RETRIES = 3;
+        const RETRY_BASE_MS = 1000;
 
-        document.body.addEventListener('htmx:afterRequest', function (e) {
-            if (e.detail.elt && e.detail.elt.id === 'upload-form') {
+        let _uploadAbortController = null;
+        let _currentSession = null;
+
+        function getSelectedDays() {
+            const radio = document.querySelector('input[name="days"]:checked');
+            return radio ? parseInt(radio.value, 10) : 7;
+        }
+
+        function setUploadUIBusy(busy) {
+            const btn = document.getElementById('upload-btn');
+            const cancelBtn = document.getElementById('upload-cancel-btn');
+            const spinner = document.getElementById('upload-spinner');
+            const icon = document.getElementById('upload-btn-icon');
+            btn.disabled = busy;
+            if (spinner) spinner.style.display = busy ? 'inline-block' : 'none';
+            if (icon) icon.style.display = busy ? 'none' : 'inline';
+            if (cancelBtn) cancelBtn.style.display = busy ? 'inline-flex' : 'none';
+        }
+
+        function resetUploadForm() {
+            document.getElementById('upload-form').reset();
+            document.getElementById('drop-title').textContent = 'Trascina qui il file';
+            document.getElementById('dropzone').classList.remove('has-file');
+            document.getElementById('upload-btn').disabled = true;
+            setUploadUIBusy(false);
+            hideProgressBar();
+            _currentSession = null;
+            _uploadAbortController = null;
+        }
+
+        async function cancelUpload() {
+            if (_uploadAbortController) {
+                _uploadAbortController.abort();
+            }
+            if (_currentSession) {
+                try {
+                    await fetch('/api/upload/' + _currentSession, { method: 'DELETE' });
+                } catch (e) { /* best-effort */ }
+            }
+            resetUploadForm();
+            document.getElementById('upload-result').innerHTML = '';
+            showToast('Upload annullato.');
+        }
+
+        async function fetchWithRetry(url, opts, retries) {
+            let delay = RETRY_BASE_MS;
+            for (let attempt = 0; attempt <= retries; attempt++) {
+                try {
+                    const resp = await fetch(url, opts);
+                    return resp;
+                } catch (err) {
+                    if (opts.signal && opts.signal.aborted) throw err;
+                    if (attempt === retries) throw err;
+                    await new Promise(r => setTimeout(r, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        async function startChunkedUpload() {
+            const input = document.getElementById('file-input');
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            const days = getSelectedDays();
+            const password = document.getElementById('password-input').value;
+            const maxDlRaw = document.getElementById('max-downloads').value;
+            const maxDownloads = maxDlRaw ? parseInt(maxDlRaw, 10) : 0;
+
+            setUploadUIBusy(true);
+            document.getElementById('upload-result').innerHTML = '';
+
+            // 1. Pre-check
+            try {
+                const chk = await fetch('/api/check-upload', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: file.name, size: file.size })
+                });
+                const chkData = await chk.json();
+                if (!chk.ok || !chkData.ok) {
+                    const reasons = { quota_exceeded: 'Quota spazio superata.', file_too_large: 'File troppo grande.', bad_request: 'Richiesta non valida.' };
+                    showUploadError(reasons[chkData.reason] || 'Errore di pre-verifica.');
+                    setUploadUIBusy(false);
+                    return;
+                }
+            } catch (e) {
+                showUploadError('Errore di rete durante la verifica.');
+                setUploadUIBusy(false);
+                return;
+            }
+
+            // 2. Init session
+            const totalChunks = Math.ceil(file.size / CHUNK_SIZE) || 1;
+            let session;
+            try {
+                const initResp = await fetch('/api/upload/init', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        filename: file.name,
+                        size: file.size,
+                        total_chunks: totalChunks,
+                        chunk_size: CHUNK_SIZE,
+                        days: days,
+                        password: password,
+                        max_downloads: maxDownloads
+                    })
+                });
+                const initData = await initResp.json();
+                if (!initResp.ok) {
+                    const errs = { quota_exceeded: 'Quota spazio superata.', too_many_sessions: 'Troppi upload in corso. Riprova tra poco.', invalid_days: 'Durata non valida.', invalid_chunk_params: 'Parametri chunk non validi.' };
+                    showUploadError(errs[initData.error] || 'Errore di inizializzazione.');
+                    setUploadUIBusy(false);
+                    return;
+                }
+                session = initData.session;
+                _currentSession = session;
+            } catch (e) {
+                showUploadError('Errore di rete durante l\'inizializzazione.');
+                setUploadUIBusy(false);
+                return;
+            }
+
+            // 3. Resume: check which chunks are already received
+            let receivedSet = new Set();
+            try {
+                const statusResp = await fetch('/api/upload/' + session + '/status');
+                if (statusResp.ok) {
+                    const statusData = await statusResp.json();
+                    (statusData.chunks_received || []).forEach(i => receivedSet.add(i));
+                }
+            } catch (e) { /* ignore — start fresh */ }
+
+            // 4. Upload chunks
+            _uploadAbortController = new AbortController();
+            const signal = _uploadAbortController.signal;
+            showProgressBar();
+
+            try {
+                for (let i = 0; i < totalChunks; i++) {
+                    if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+                    if (receivedSet.has(i)) {
+                        // Already uploaded — count toward progress
+                        setProgress(Math.round((i + 1) / totalChunks * 95));
+                        continue;
+                    }
+                    const start = i * CHUNK_SIZE;
+                    const end = Math.min(start + CHUNK_SIZE, file.size);
+                    const chunk = file.slice(start, end);
+
+                    const chunkResp = await fetchWithRetry(
+                        '/api/upload/' + session + '/chunk/' + i,
+                        { method: 'POST', body: chunk, signal },
+                        MAX_RETRIES
+                    );
+                    if (!chunkResp.ok) {
+                        const d = await chunkResp.json().catch(() => ({}));
+                        throw new Error('chunk_error:' + (d.error || chunkResp.status));
+                    }
+                    receivedSet.add(i);
+                    setProgress(Math.round((i + 1) / totalChunks * 95));
+                }
+            } catch (e) {
+                if (e.name === 'AbortError') return; // already handled by cancelUpload
+                showUploadError('Errore durante il caricamento: ' + e.message + '. Riprova.');
+                setUploadUIBusy(false);
+                hideProgressBar();
+                return;
+            }
+
+            // 5. Complete
+            try {
+                const completeResp = await fetch('/api/upload/' + session + '/complete', { method: 'POST', signal });
+                const completeData = await completeResp.json();
+                if (!completeResp.ok) {
+                    const errs = { missing_chunks: 'Alcuni chunk mancanti. Riprova.' };
+                    showUploadError(errs[completeData.error] || 'Errore di completamento.');
+                    setUploadUIBusy(false);
+                    hideProgressBar();
+                    return;
+                }
                 setProgress(100);
                 setTimeout(hideProgressBar, 800);
+                showUploadSuccess(completeData);
+                resetUploadForm();
+                setTimeout(() => htmx.trigger('#shares-list', 'refresh'), 300);
+            } catch (e) {
+                if (e.name === 'AbortError') return;
+                showUploadError('Errore durante il completamento. Riprova.');
+                setUploadUIBusy(false);
+                hideProgressBar();
             }
-            // Refresh lista dopo eliminazione
+        }
+
+        function showUploadError(msg) {
+            document.getElementById('upload-result').innerHTML =
+                '<div class="upload-result error" role="alert"><div class="result-inner"><span class="result-icon">✕</span><div class="result-content">' + escapeHtml(msg) + '</div></div></div>';
+        }
+
+        function showUploadSuccess(data) {
+            const url = escapeHtml(data.download_url || '');
+            const name = escapeHtml(data.filename || '');
+            const days = data.days || 0;
+            document.getElementById('upload-result').innerHTML =
+                '<div id="upload-result-card" class="upload-result success" role="alert">' +
+                '<div class="result-inner"><span class="result-icon">✓</span>' +
+                '<div class="result-content"><strong>' + name + '</strong> caricato con successo!<br>' +
+                '<small>scade tra ' + days + ' giorni</small></div></div>' +
+                '<div class="link-box"><input type="text" value="' + url + '" readonly id="share-link" />' +
+                '<button class="btn btn-copy" onclick="copyLink()">Copia link</button></div></div>';
+        }
+
+        function escapeHtml(s) {
+            return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        // HTMX events for delete/refresh
+        document.body.addEventListener('htmx:afterRequest', function (e) {
             if (e.detail.requestConfig && e.detail.requestConfig.verb === 'delete') {
                 htmx.trigger('#shares-list', 'refresh');
             }

@@ -45,6 +45,13 @@ type Config struct {
 	AdminUsers string
 	// UserQuotaMB: Max total space a user can fill.
 	UserQuotaMB int64
+	// UploadChunkSizeMB: default chunk size for chunked uploads (default 10 MB).
+	UploadChunkSizeMB int64
+	// UploadSessionTTLHours: how long an in-progress upload session is kept before
+	// being cleaned up by the background job (default 24 hours).
+	UploadSessionTTLHours int
+	// MaxUploadSessionsPerUser: concurrent in-progress upload sessions allowed per user.
+	MaxUploadSessionsPerUser int
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -70,7 +77,10 @@ func Load() *Config {
 		EnableSHA256:       getEnvBool("ENABLE_SHA256", false),
 		LDAPAdminGroup:     getEnv("LDAP_ADMIN_GROUP", ""),
 		AdminUsers:         getEnv("ADMIN_USERS", ""),
-		UserQuotaMB:        int64(getEnvInt("USER_QUOTA_MB", 0)),
+		UserQuotaMB:              int64(getEnvInt("USER_QUOTA_MB", 0)),
+		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 10)),
+		UploadSessionTTLHours:    getEnvInt("UPLOAD_SESSION_TTL_HOURS", 24),
+		MaxUploadSessionsPerUser: getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 3),
 	}
 }
 
