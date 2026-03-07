@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8" />
@@ -33,7 +33,7 @@
         </div>
         <div class="nav-user">
             <a href="/dashboard" class="btn btn-ghost" style="margin-right: 0.5rem;">
-                Torna a I miei file
+                Back to My Files
             </a>
             <span class="user-chip">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -43,7 +43,7 @@
                 {{.Username}}
             </span>
             <form method="POST" action="/logout" style="margin:0">
-                <button type="submit" class="btn btn-ghost" title="Disconnetti" aria-label="Disconnetti">
+                <button type="submit" class="btn btn-ghost" title="Sign out" aria-label="Sign out">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                         <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
@@ -60,7 +60,7 @@
         <section>
             <div class="section-header"
                 style="display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 1rem;">
-                <h2 class="section-title" style="margin-bottom: 0;">Archivio Globale File</h2>
+                <h2 class="section-title" style="margin-bottom: 0;">Global File Archive</h2>
 
                 <div style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
                     {{if gt .TotalSpace 0}}
@@ -76,7 +76,7 @@
                     </div>
                     {{end}}
 
-                    <span class="shares-count" style="margin-top: 0;">{{len .Files}} file totali</span>
+                    <span class="shares-count" style="margin-top: 0;">{{len .Files}} total files</span>
                 </div>
             </div>
 
@@ -89,7 +89,7 @@
                         <path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z"></path>
                     </svg>
                 </span>
-                <p style="color: var(--c-text-2); margin-top: 1rem;">Nessun file caricato attualmente nel sistema.</p>
+                <p style="color: var(--c-text-2); margin-top: 1rem;">No files are currently uploaded in the system.</p>
             </div>
             {{else}}
             <div class="shares-table-wrap">
@@ -98,17 +98,17 @@
                         <tr>
                             <th>ID / Nome</th>
                             <th>Uploader</th>
-                            <th>Dimensione</th>
-                            <th>Caricato</th>
-                            <th>Scadenza / Limiti</th>
-                            <th>Azioni</th>
+                            <th>Size</th>
+                            <th>Uploaded</th>
+                            <th>Expiry / Limits</th>
+                            <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody id="admin-shares-list">
                         {{range .Files}}
                         <tr id="share-{{.Token}}">
                             <td class="admin-secret-cell">
-                                <strong class="admin-secret-badge" title="ID Segreto: {{.Token}}">
+                                <strong class="admin-secret-badge" title="Secret ID: {{.Token}}">
                                     <span class="admin-secret-lock" aria-hidden="true">
                                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                             stroke-linecap="round" stroke-linejoin="round">
@@ -116,10 +116,10 @@
                                             <path d="M7 11V8a5 5 0 0 1 10 0v3"></path>
                                         </svg>
                                     </span>
-                                    [Oscurato]
+                                    [Hidden]
                                 </strong>
                                 {{if .PasswordHash}}
-                                <span class="admin-password-badge" title="Protetto da Password" aria-label="Protetto da password">
+                                <span class="admin-password-badge" title="Password protected" aria-label="Password protected">
                                     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                         stroke-linecap="round" stroke-linejoin="round">
                                         <circle cx="7" cy="15" r="4"></circle>
@@ -136,7 +136,7 @@
                             <td><span title="{{fmtDate .CreatedAt}}">{{daysAgo .CreatedAt}}</span></td>
                             <td>
                                 {{if isExpired .ExpiresAt}}
-                                <span style="color: var(--c-danger);">Scaduto</span>
+                                <span style="color: var(--c-danger);">Expired</span>
                                 {{else}}
                                 <span style="color: var(--c-text-2);">{{daysLeft .ExpiresAt}}</span>
                                 {{end}}
@@ -151,8 +151,8 @@
                                 <div style="display: flex; gap: 0.5rem; align-items: center;">
                                     <button class="btn btn-danger btn-xs" hx-delete="/share/{{.Token}}"
                                         hx-target="#share-{{.Token}}" hx-swap="delete"
-                                        hx-confirm="Sei sicuro di voler eliminare forzatamente questo file di {{.Uploader}}?">
-                                        Elimina
+                                        hx-confirm="Are you sure you want to forcibly delete this file from {{.Uploader}}?">
+                                        Delete
                                     </button>
                                 </div>
                             </td>
@@ -161,8 +161,7 @@
                     </tbody>
                 </table>
             </div>
-            <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--c-text-2); text-align: center;">Per questioni
-                di privacy, i file degli utenti non sono scaricabili o visibili in chiaro dagli amministratori.</p>
+            <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--c-text-2); text-align: center;">For privacy reasons, user files are not downloadable or visible in plain form to administrators.</p>
             {{end}}
         </section>
     </main>

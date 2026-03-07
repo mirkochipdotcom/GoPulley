@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 
 <head>
     <meta charset="UTF-8" />
@@ -33,7 +33,7 @@
             {{if gt .QuotaMB 0}}
             <div class="quota-wrap"
                 style="display: flex; align-items: center; gap: 0.5rem; margin-right: 1.5rem; background: rgba(255, 255, 255, 0.05); padding: 0.4rem 0.8rem; border-radius: 99px; border: 1px solid var(--c-border-2);">
-                <span style="font-size: 0.75rem; color: var(--c-text-2);">Spazio: <strong>{{.UsedMB}}MB</strong> /
+                <span style="font-size: 0.75rem; color: var(--c-text-2);">Space: <strong>{{.UsedMB}}MB</strong> /
                     {{.QuotaMB}}MB</span>
                 <div
                     style="width: 80px; height: 6px; background: rgba(0,0,0,0.3); border-radius: 99px; overflow: hidden;">
@@ -57,7 +57,7 @@
                 {{.Username}}
             </span>
             <form method="POST" action="/logout" style="margin:0">
-                <button type="submit" class="btn btn-ghost">Esci</button>
+                <button type="submit" class="btn btn-ghost">Sign out</button>
             </form>
         </div>
     </nav>
@@ -66,7 +66,7 @@
 
         <!-- ── Upload section ── -->
         <section class="upload-section">
-            <h2 class="section-title">Carica un file</h2>
+            <h2 class="section-title">Upload a file</h2>
 
             <form id="upload-form" onsubmit="return false;">
 
@@ -83,14 +83,14 @@
                                 <line x1="12" y1="3" x2="12" y2="15" />
                             </svg>
                         </div>
-                        <p class="drop-title" id="drop-title">Trascina qui il file</p>
-                        <p class="drop-sub">oppure clicca per selezionare</p>
-                        <p class="drop-limit">Max {{.MaxDays}} giorni · Max 2 GB per file</p>
+                        <p class="drop-title" id="drop-title">Drag your file here</p>
+                        <p class="drop-sub">or click to select</p>
+                        <p class="drop-limit">Max {{.MaxDays}} days · Max 2 GB per file</p>
                     </div>
                     <!-- Loading overlay -->
                     <div class="dropzone-loading" id="dropzone-loading" aria-hidden="true">
                         <div class="dz-spinner"></div>
-                        <span>Caricamento&hellip;</span>
+                        <span>Uploading&hellip;</span>
                     </div>
                     <input type="file" id="file-input" name="file" hidden onchange="onFileSelected(this)" />
                 </div>
@@ -99,13 +99,13 @@
                 <div class="upload-options"
                     style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
                     <div style="display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap;">
-                        <label class="options-label" style="margin-bottom: 0;">Scadenza limitata:</label>
+                        <label class="options-label" style="margin-bottom: 0;">Limited expiration:</label>
                         <div class="days-selector">
                             {{range $d := seq 1 7 30 365}}
                             {{if le $d $.MaxDays}}
                             <label class="day-option">
                                 <input type="radio" name="days" value="{{$d}}" {{if eq $d 7}}checked{{end}}>
-                                <span>{{if eq $d 365}}1 anno{{else}}{{$d}}g{{end}}</span>
+                                <span>{{if eq $d 365}}1 year{{else}}{{$d}}d{{end}}</span>
                             </label>
                             {{end}}
                             {{end}}
@@ -118,7 +118,7 @@
 
                     <button type="button" class="btn-toggle-advanced" onclick="toggleAdvancedOptions()"
                         style="margin-top: 0;">
-                        Opzioni Avanzate <span id="advanced-chevron">+</span>
+                        Advanced Options <span id="advanced-chevron">+</span>
                     </button>
                 </div>
 
@@ -126,14 +126,14 @@
                 <div id="advanced-options" class="advanced-options-content">
                     <div class="advanced-inputs">
                         <div class="input-group">
-                            <label for="password-input">Password di blocco</label>
+                            <label for="password-input">Lock password</label>
                             <input type="password" id="password-input" name="password"
-                                placeholder="Lascia vuoto per disabilitare" autocomplete="new-password">
+                                placeholder="Leave blank to disable" autocomplete="new-password">
                         </div>
                         <div class="input-group">
-                            <label for="max-downloads">Limite Download</label>
+                            <label for="max-downloads">Download limit</label>
                             <input type="number" id="max-downloads" name="max_downloads" placeholder="es. 1"
-                                title="Elimina automaticamente il file dopo N download (0 = illimitati)" min="0">
+                                title="Automatically delete the file after N downloads (0 = unlimited)" min="0">
                         </div>
                     </div>
                 </div>
@@ -148,10 +148,10 @@
                             <line x1="12" y1="3" x2="12" y2="15" />
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
                         </svg>
-                        Carica
+                        Upload
                     </button>
                     <button type="button" class="btn btn-ghost" id="upload-cancel-btn" style="display:none;"
-                        onclick="cancelUpload()">Annulla</button>
+                        onclick="cancelUpload()">Cancel</button>
                 </div>
 
                 <!-- Upload progress bar -->
@@ -168,8 +168,8 @@
         <!-- ── Shares list ── -->
         <section class="shares-section">
             <div class="section-header">
-                <h2 class="section-title">Le tue condivisioni</h2>
-                <span class="shares-count" id="shares-count">{{len .Shares}} attive</span>
+                <h2 class="section-title">Your shares</h2>
+                <span class="shares-count" id="shares-count">{{len .Shares}} active</span>
             </div>
 
             <div id="shares-list" hx-get="/shares-list" hx-trigger="refresh" hx-swap="innerHTML">
@@ -258,16 +258,16 @@
         function copyLink() {
             const inp = document.getElementById('share-link');
             if (!inp) return;
-            navigator.clipboard.writeText(inp.value).then(() => showToast('Link copiato negli appunti!'));
+            navigator.clipboard.writeText(inp.value).then(() => showToast('Link copied to clipboard!'));
         }
 
         function copyShareLink(url) {
-            navigator.clipboard.writeText(url).then(() => showToast('Link copiato negli appunti!'));
+            navigator.clipboard.writeText(url).then(() => showToast('Link copied to clipboard!'));
         }
 
         function copyShareSHA256(value) {
             if (!value) return;
-            navigator.clipboard.writeText(value).then(() => showToast('SHA-256 copiato negli appunti!'));
+            navigator.clipboard.writeText(value).then(() => showToast('SHA-256 copied to clipboard!'));
         }
 
         // ── Toast ────────────────────────────────────────────────
@@ -326,7 +326,7 @@
 
         function resetUploadForm() {
             document.getElementById('upload-form').reset();
-            document.getElementById('drop-title').textContent = 'Trascina qui il file';
+            document.getElementById('drop-title').textContent = 'Drag your file here';
             document.getElementById('dropzone').classList.remove('has-file');
             document.getElementById('upload-btn').disabled = true;
             setUploadUIBusy(false);
@@ -346,7 +346,7 @@
             }
             resetUploadForm();
             document.getElementById('upload-result').innerHTML = '';
-            showToast('Upload annullato.');
+            showToast('Upload canceled.');
         }
 
         async function fetchWithRetry(url, opts, retries) {
@@ -385,13 +385,13 @@
                 });
                 const chkData = await chk.json();
                 if (!chk.ok || !chkData.ok) {
-                    const reasons = { quota_exceeded: 'Quota spazio superata.', file_too_large: 'File troppo grande.', bad_request: 'Richiesta non valida.' };
-                    showUploadError(reasons[chkData.reason] || 'Errore di pre-verifica.');
+                    const reasons = { quota_exceeded: 'Storage quota exceeded.', file_too_large: 'File too large.', bad_request: 'Invalid request.' };
+                    showUploadError(reasons[chkData.reason] || 'Pre-check error.');
                     setUploadUIBusy(false);
                     return;
                 }
             } catch (e) {
-                showUploadError('Errore di rete durante la verifica.');
+                showUploadError('Network error during validation.');
                 setUploadUIBusy(false);
                 return;
             }
@@ -415,15 +415,15 @@
                 });
                 const initData = await initResp.json();
                 if (!initResp.ok) {
-                    const errs = { quota_exceeded: 'Quota spazio superata.', too_many_sessions: 'Troppi upload in corso. Riprova tra poco.', invalid_days: 'Durata non valida.', invalid_chunk_params: 'Parametri chunk non validi.' };
-                    showUploadError(errs[initData.error] || 'Errore di inizializzazione.');
+                    const errs = { quota_exceeded: 'Storage quota exceeded.', too_many_sessions: 'Too many uploads in progress. Try again soon.', invalid_days: 'Invalid duration.', invalid_chunk_params: 'Invalid chunk parameters.' };
+                    showUploadError(errs[initData.error] || 'Initialization error.');
                     setUploadUIBusy(false);
                     return;
                 }
                 session = initData.session;
                 _currentSession = session;
             } catch (e) {
-                showUploadError('Errore di rete durante l\'inizializzazione.');
+                showUploadError('Network error during initialization.');
                 setUploadUIBusy(false);
                 return;
             }
@@ -469,7 +469,7 @@
                 }
             } catch (e) {
                 if (e.name === 'AbortError') return; // already handled by cancelUpload
-                showUploadError('Errore durante il caricamento: ' + e.message + '. Riprova.');
+                showUploadError('Error during upload: ' + e.message + '. Try again.');
                 setUploadUIBusy(false);
                 hideProgressBar();
                 return;
@@ -480,8 +480,8 @@
                 const completeResp = await fetch('/api/upload/' + session + '/complete', { method: 'POST', signal });
                 const completeData = await completeResp.json();
                 if (!completeResp.ok) {
-                    const errs = { missing_chunks: 'Alcuni chunk mancanti. Riprova.' };
-                    showUploadError(errs[completeData.error] || 'Errore di completamento.');
+                    const errs = { missing_chunks: 'Some chunks are missing. Try again.' };
+                    showUploadError(errs[completeData.error] || 'Completion error.');
                     setUploadUIBusy(false);
                     hideProgressBar();
                     return;
@@ -493,7 +493,7 @@
                 setTimeout(() => htmx.trigger('#shares-list', 'refresh'), 300);
             } catch (e) {
                 if (e.name === 'AbortError') return;
-                showUploadError('Errore durante il completamento. Riprova.');
+                showUploadError('Error during completion. Try again.');
                 setUploadUIBusy(false);
                 hideProgressBar();
             }
@@ -511,10 +511,10 @@
             document.getElementById('upload-result').innerHTML =
                 '<div id="upload-result-card" class="upload-result success" role="alert">' +
                 '<div class="result-inner"><span class="result-icon">✓</span>' +
-                '<div class="result-content"><strong>' + name + '</strong> caricato con successo!<br>' +
-                '<small>scade tra ' + days + ' giorni</small></div></div>' +
+                '<div class="result-content"><strong>' + name + '</strong> uploaded successfully!<br>' +
+                '<small>expires in ' + days + ' days</small></div></div>' +
                 '<div class="link-box"><input type="text" value="' + url + '" readonly id="share-link" />' +
-                '<button class="btn btn-copy" onclick="copyLink()">Copia link</button></div></div>';
+                '<button class="btn btn-copy" onclick="copyLink()">Copy link</button></div></div>';
         }
 
         function escapeHtml(s) {
@@ -533,7 +533,7 @@
             if (e.detail.elt && e.detail.elt.id === 'shares-list') {
                 const rows = document.querySelectorAll('#shares-list tbody tr');
                 const badge = document.getElementById('shares-count');
-                if (badge) badge.textContent = rows.length + ' attive';
+                if (badge) badge.textContent = rows.length + ' active';
             }
         });
 
@@ -563,8 +563,8 @@
 {{if not .Shares}}
 <div class="empty-state">
     <div class="empty-icon">📭</div>
-    <p>Nessuna condivisione attiva.</p>
-    <p class="text-muted">Carica il tuo primo file qui sopra.</p>
+    <p>No active shares.</p>
+    <p class="text-muted">Upload il tuo primo file qui sopra.</p>
 </div>
 {{else}}
 <div class="shares-table-wrap">
@@ -572,10 +572,10 @@
         <thead>
             <tr>
                 <th>File</th>
-                <th>Dimensione</th>
-                <th>Scadenza</th>
+                <th>Size</th>
+                <th>Expiry</th>
                 <th>DL</th>
-                <th>Azioni</th>
+                <th>Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -586,7 +586,7 @@
                         <span class="file-icon-sm" aria-hidden="true">{{fileIcon .OriginalName}}</span>
                         <span class="filename-text">{{.OriginalName}}</span>
                         {{if .PasswordHash}}
-                        <span class="password-lock-badge" title="Protetto da Password" aria-label="Protetto da password">
+                        <span class="password-lock-badge" title="Password protected" aria-label="Password protected">
                             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round" stroke-linejoin="round">
                                 <rect x="3" y="11" width="18" height="10" rx="2" ry="2"></rect>
@@ -599,7 +599,7 @@
                 <td class="td-size">{{humanSize .SizeBytes}}</td>
                 <td class="td-expiry">
                     {{if isExpired .ExpiresAt}}
-                    <span class="badge badge-expired">Scaduto</span>
+                    <span class="badge badge-expired">Expired</span>
                     {{else if isExpiringSoon .ExpiresAt}}
                     <span class="badge badge-expired">{{daysLeft .ExpiresAt}}</span>
                     {{else}}
@@ -610,7 +610,7 @@
                 <td class="td-actions">
                     <div class="share-actions">
                         {{if not (isExpired .ExpiresAt)}}
-                        <button class="btn-icon" onclick="copyShareLink('{{$.BaseURL}}/d/{{.Token}}')" title="Copia link">
+                        <button class="btn-icon" onclick="copyShareLink('{{$.BaseURL}}/d/{{.Token}}')" title="Copy link">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M10 13a5 5 0 0 0 7.07 0l3.54-3.54a5 5 0 1 0-7.07-7.07L11 4"></path>
@@ -620,7 +620,7 @@
                         {{end}}
                         {{if $.EnableSHA}}
                         {{if .SHA256}}
-                        <button class="btn-icon" onclick="copyShareSHA256('{{.SHA256}}')" title="Copia SHA-256: {{.SHA256}}">
+                        <button class="btn-icon" onclick="copyShareSHA256('{{.SHA256}}')" title="Copy SHA-256: {{.SHA256}}">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -629,7 +629,7 @@
                         </button>
                         {{else}}
                         <button class="btn-icon btn-icon-secondary" hx-post="/share/{{.Token}}/compute-sha256"
-                            hx-target="this" hx-swap="outerHTML" title="Calcola SHA-256">
+                            hx-target="this" hx-swap="outerHTML" title="Compute SHA-256">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <path d="M6 2h12"></path>
@@ -642,7 +642,7 @@
                         {{end}}
                         <button class="btn-icon btn-icon-danger" hx-delete="/share/{{.Token}}"
                             hx-target="#share-{{.Token}}" hx-swap="outerHTML swap:0.3s"
-                            hx-confirm="Eliminare questa condivisione?" title="Elimina">
+                            hx-confirm="Delete this share?" title="Delete">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                                 <polyline points="3 6 5 6 21 6"></polyline>

@@ -36,7 +36,7 @@ func (a *App) handleBrandLogo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "not found", 404)
 		return
 	}
-	// Il logo è in /data (es. /data/my-logo.png)
+	// Logo is stored in /data (e.g. /data/my-logo.png)
 	logoPath := filepath.Join(filepath.Dir(a.cfg.DBPath), a.cfg.BrandLogoPath)
 	http.ServeFile(w, r, logoPath)
 }
@@ -97,7 +97,7 @@ func (a *App) loadTemplates(baseDir string) error {
 		"daysLeft": func(t time.Time) string {
 			d := time.Until(t)
 			if d <= 0 {
-				return "scaduto"
+				return "expired"
 			}
 			if d < 24*time.Hour {
 				hours := int(d.Hours())
@@ -108,9 +108,9 @@ func (a *App) loadTemplates(baseDir string) error {
 			}
 			days := int(d.Hours() / 24)
 			if days == 1 {
-				return "1 giorno"
+				return "1 day"
 			}
-			return fmt.Sprintf("%d giorni", days)
+			return fmt.Sprintf("%d days", days)
 		},
 		"isExpiringSoon": func(t time.Time) bool {
 			d := time.Until(t)
@@ -122,12 +122,12 @@ func (a *App) loadTemplates(baseDir string) error {
 		"daysAgo": func(t time.Time) string {
 			days := int(time.Since(t).Hours() / 24)
 			if days == 0 {
-				return "oggi"
+				return "today"
 			}
 			if days == 1 {
-				return "ieri"
+				return "yesterday"
 			}
-			return fmt.Sprintf("%d giorni fa", days)
+			return fmt.Sprintf("%d days ago", days)
 		},
 		"safeHTMLAttr": func(s string) template.HTMLAttr {
 			return template.HTMLAttr(s)
@@ -233,20 +233,20 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := r.FormValue("password")
 
-	log.Printf("📥 Ricevuta richiesta di login per: %s", username)
+	log.Printf("📥 Received login request for: %s", username)
 
 	ok, isAdmin, err := auth.Authenticate(username, password, a.cfg)
 	if err != nil {
 		log.Printf("auth error for %s: %v", username, err)
 		w.Header().Set("HX-Reswap", "outerHTML")
-		a.renderError(w, "Errore di connessione al server LDAP. Riprova.")
+		a.renderError(w, "Unable to connect to LDAP server. Try again.")
 		return
 	}
 	if !ok {
 		log.Printf("login failed for %s: invalid credentials or not in required group", username)
 		w.Header().Set("HX-Reswap", "outerHTML")
 		// HTMX drops 4xx/5xx by default. We return 200 so the error message is displayed.
-		a.renderError(w, "Credenziali non valide o utente non autorizzato.")
+		a.renderError(w, "Invalid credentials or unauthorized user.")
 		return
 	}
 
@@ -399,7 +399,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
 
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "file troppo grande o form non valido", http.StatusBadRequest)
+		http.Error(w, "file too large or invalid form", http.StatusBadRequest)
 		return
 	}
 
@@ -407,7 +407,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	days := 0
 	fmt.Sscanf(r.FormValue("days"), "%d", &days)
 	if days < 1 || days > a.cfg.MaxGlobalDays {
-		http.Error(w, fmt.Sprintf("durata non valida (1–%d giorni)", a.cfg.MaxGlobalDays), http.StatusBadRequest)
+		http.Error(w, fmt.Sprintf("invalid duration (1-%d days)", a.cfg.MaxGlobalDays), http.StatusBadRequest)
 		return
 	}
 
@@ -423,7 +423,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			log.Printf("bcrypt error: %v", err)
-			http.Error(w, "errore server (password)", 500)
+			http.Error(w, "server error (password)", 500)
 			return
 		}
 		passwordHash = string(hash)
@@ -431,7 +431,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	file, header, err := r.FormFile("file")
 	if err != nil {
-		http.Error(w, "nessun file ricevuto", http.StatusBadRequest)
+		http.Error(w, "no file uploaded", http.StatusBadRequest)
 		return
 	}
 	file.Close()
@@ -441,11 +441,11 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		usedBytes, err := a.db.GetUserTotalBytes(username)
 		if err != nil {
 			log.Printf("quota check error: %v", err)
-			http.Error(w, "errore server (quota)", 500)
+			http.Error(w, "server error (quota)", 500)
 			return
 		}
 		if usedBytes+header.Size > a.cfg.UserQuotaMB*1024*1024 {
-			http.Error(w, "quota spazio superata", http.StatusForbidden)
+			http.Error(w, "storage quota exceeded", http.StatusForbidden)
 			return
 		}
 	}
@@ -453,14 +453,14 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	// Ensure upload dir exists
 	if err := os.MkdirAll(a.cfg.UploadDir, 0750); err != nil {
 		log.Printf("mkdir uploads: %v", err)
-		http.Error(w, "errore server", 500)
+		http.Error(w, "server error", 500)
 		return
 	}
 
 	filePath, originalName, sizeBytes, err := storage.SaveFile(header, a.cfg.UploadDir)
 	if err != nil {
 		log.Printf("save file: %v", err)
-		http.Error(w, "errore salvataggio file", 500)
+		http.Error(w, "file save error", 500)
 		return
 	}
 
@@ -471,7 +471,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		log.Printf("create share: %v", err)
 		storage.DeleteFile(filePath)
-		http.Error(w, "errore database", 500)
+		http.Error(w, "database error", 500)
 		return
 	}
 
@@ -498,13 +498,13 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
   <div class="result-inner">
     <span class="result-icon">✓</span>
     <div class="result-content">
-      <strong>%s</strong> caricato con successo!<br>
-      <small>%s &middot; scade tra %d giorni</small>
+      <strong>%s</strong> uploaded successfully!<br>
+      <small>%s &middot; expires in %d days</small>
     </div>
   </div>
   <div class="link-box">
     <input type="text" value="%s" readonly id="share-link" />
-    <button class="btn btn-copy" onclick="copyLink()">Copia link</button>
+    <button class="btn btn-copy" onclick="copyLink()">Copy link</button>
   </div>
 	%s
 </div>
@@ -512,7 +512,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 <script>
   setTimeout(() => { htmx.trigger('#shares-list', 'refresh'); }, 300);
   document.getElementById('upload-form').reset();
-  document.getElementById('drop-title').textContent = 'Trascina qui il file';
+  document.getElementById('drop-title').textContent = 'Drag your file here';
   document.getElementById('dropzone').classList.remove('has-file');
   document.getElementById('upload-btn').disabled = true;
 </script>
@@ -525,7 +525,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 			if !a.cfg.EnableSHA256 {
 				return ""
 			}
-			return `<p class="sha-pending-note">SHA-256 in lavorazione: comparira nella dashboard appena pronto.</p>`
+			return `<p class="sha-pending-note">SHA-256 in progress: it will appear in the dashboard when ready.</p>`
 		}(),
 	)
 }
@@ -540,7 +540,7 @@ func (a *App) handleComputeShareSHA256(w http.ResponseWriter, r *http.Request, t
 			http.Error(w, "not found", 404)
 			return
 		}
-		http.Error(w, "errore database", 500)
+		http.Error(w, "database error", 500)
 		return
 	}
 	if share.Uploader != username {
@@ -551,13 +551,13 @@ func (a *App) handleComputeShareSHA256(w http.ResponseWriter, r *http.Request, t
 	// If hash already exists, just return the row
 	if share.SHA256 != "" {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprintf(w, `<p class="sha-chip">Copia SHA-256: <code>%s</code></p>`, template.HTMLEscapeString(share.SHA256))
+		fmt.Fprintf(w, `<p class="sha-chip">Copy SHA-256: <code>%s</code></p>`, template.HTMLEscapeString(share.SHA256))
 		return
 	}
 
 	// Compute hash asynchronously and return pending state
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<span class="badge badge-pending" data-sha256-pending="true">In lavorazione</span>
+	fmt.Fprintf(w, `<span class="badge badge-pending" data-sha256-pending="true">In progress</span>
 <script>
   setTimeout(() => { htmx.trigger('#share-%s', 'refresh'); }, 2500);
 </script>`, template.HTMLEscapeString(token))
@@ -580,7 +580,7 @@ func (a *App) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
 	token := strings.TrimPrefix(r.URL.Path, "/share/")
 	if token == "" {
-		http.Error(w, "token mancante", 400)
+		http.Error(w, "missing token", 400)
 		return
 	}
 
@@ -590,7 +590,7 @@ func (a *App) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "not found", 404)
 			return
 		}
-		http.Error(w, "errore database", 500)
+		http.Error(w, "database error", 500)
 		return
 	}
 	if share.Uploader != username {
@@ -601,7 +601,7 @@ func (a *App) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 	storage.DeleteFile(share.FilePath)
 	if err := a.db.DeleteShare(token); err != nil {
 		log.Printf("delete share: %v", err)
-		http.Error(w, "errore database", 500)
+		http.Error(w, "database error", 500)
 		return
 	}
 
@@ -652,10 +652,10 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			data.Error = "Link non trovato o già eliminato."
+			data.Error = "Link not found or already deleted."
 		} else {
 			log.Printf("get share: %v", err)
-			data.Error = "Errore interno. Riprova più tardi."
+			data.Error = "Internal error. Try again later."
 		}
 		a.render(w, "download", data)
 		return
@@ -693,7 +693,7 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 
 				if err := sess.Save(r, w); err != nil {
 					log.Printf("save session: %v", err)
-					http.Error(w, "errore server", 500)
+					http.Error(w, "server error", 500)
 					return
 				}
 
@@ -721,7 +721,7 @@ func (a *App) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if time.Now().After(share.ExpiresAt) || (share.MaxDownloads > 0 && share.Downloaded >= share.MaxDownloads) {
-		http.Error(w, "link scaduto", 410)
+		http.Error(w, "expired link", 410)
 		return
 	}
 

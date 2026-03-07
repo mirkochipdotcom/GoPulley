@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="it">
+<html lang="en">
 
 <head>
   <meta charset="UTF-8" />
@@ -25,8 +25,8 @@
       {{end}}
     </div>
 
-    <h1 class="auth-title">Bentornato</h1>
-    <p class="auth-subtitle">Accedi con le credenziali aziendali{{if .MockMode}} <span class="badge-dev">DEV
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-subtitle">Sign in with your corporate credentials{{if .MockMode}} <span class="badge-dev">DEV
         MODE</span>{{end}}</p>
 
     <form hx-post="/login" hx-target="#login-error" hx-swap="outerHTML" hx-indicator="#spinner" class="auth-form">
@@ -47,7 +47,7 @@
 
       <button type="submit" class="btn btn-primary btn-full">
         <span id="spinner" class="htmx-indicator spinner-ring"></span>
-        Accedi
+        Sign in
       </button>
     </form>
   </div>
