@@ -887,11 +887,18 @@ a:hover {
 }
 
 .input-group-download {
-  flex: 0 1 120px;
+  flex: 0 0 96px;
+  min-width: 96px;
+  max-width: 96px;
 }
 
 .input-group-email {
-  flex: 2 1 340px;
+  flex: 4 1 460px;
+  min-width: 320px;
+}
+
+#max-downloads {
+  max-width: 100%;
 }
 
 .input-group label {
