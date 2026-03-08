@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>GoPulley — {{t "dashboard.page_title"}}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css" />
@@ -126,16 +127,16 @@
                 <!-- Advanced Options Panel -->
                 <div id="advanced-options" class="advanced-options-content">
                     <div class="advanced-inputs">
-                        <div class="input-group">
+                        <div class="input-group input-group-compact">
                             <label for="password-input">{{t "dashboard.lock_password"}}</label>
                             <input type="password" id="password-input" name="password" placeholder="{{t "dashboard.lock_password_placeholder"}}" autocomplete="new-password">
                         </div>
-                        <div class="input-group">
+                        <div class="input-group input-group-download">
                             <label for="max-downloads">{{t "dashboard.download_limit"}}</label>
                             <input type="number" id="max-downloads" name="max_downloads" placeholder="{{t "dashboard.download_limit_placeholder"}}" title="{{t "dashboard.download_limit_hint"}}"
                                 min="0">
                         </div>
-                        <div class="input-group">
+                        <div class="input-group input-group-email">
                             <label for="share-email">{{t "dashboard.email_to"}}</label>
                             <input type="email" id="share-email" name="share_email" placeholder="{{t "dashboard.email_to_placeholder"}}" title="{{t "dashboard.email_to_hint"}}">
                         </div>

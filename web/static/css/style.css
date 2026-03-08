@@ -866,6 +866,7 @@ a:hover {
 
 .advanced-inputs {
   display: flex;
+  flex-wrap: wrap;
   gap: 1.5rem;
   padding: 1.25rem;
   background: rgba(255, 255, 255, 0.02);
@@ -878,6 +879,19 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+/* Password and download limit should stay compact, email needs more room. */
+.input-group-compact {
+  flex: 0 1 180px;
+}
+
+.input-group-download {
+  flex: 0 1 120px;
+}
+
+.input-group-email {
+  flex: 2 1 340px;
 }
 
 .input-group label {
@@ -1241,6 +1255,13 @@ a.version-badge:hover {
   .upload-options {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .input-group,
+  .input-group-compact,
+  .input-group-download,
+  .input-group-email {
+    flex: 1 1 100%;
   }
 
   /* Branding: nascondi il nome su schermi piccoli, mostra solo l'icona */
