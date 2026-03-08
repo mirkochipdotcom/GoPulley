@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,7 @@ import (
 	"github.com/youorg/gopulley/internal/auth"
 	"github.com/youorg/gopulley/internal/config"
 	"github.com/youorg/gopulley/internal/database"
+	"github.com/youorg/gopulley/internal/email"
 	"github.com/youorg/gopulley/internal/i18n"
 	"github.com/youorg/gopulley/internal/storage"
 	"golang.org/x/crypto/bcrypt"
@@ -40,6 +42,17 @@ func (a *App) handleBrandLogo(w http.ResponseWriter, r *http.Request) {
 	// Logo is stored in /data (e.g. /data/my-logo.png)
 	logoPath := filepath.Join(filepath.Dir(a.cfg.DBPath), a.cfg.BrandLogoPath)
 	http.ServeFile(w, r, logoPath)
+}
+
+// shouldUseSecureCookie determina se il flag Secure del cookie deve essere true.
+// Priorità: 1) X-Forwarded-Proto header (da reverse proxy), 2) configurazione statica.
+func shouldUseSecureCookie(r *http.Request, cfg *config.Config) bool {
+	// Se il reverse proxy ha impostato X-Forwarded-Proto, fidati di quello
+	if proto := r.Header.Get("X-Forwarded-Proto"); proto != "" {
+		return proto == "https"
+	}
+	// Altrimenti fallback sulla configurazione statica
+	return cfg.SecureCookies
 }
 
 // ── App ─────────────────────────────────────────────────────────────────────
@@ -257,11 +270,20 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	sess, _ := a.store.Get(r, sessionName)
 	sess.Values["username"] = username
 	sess.Values["is_admin"] = isAdmin
+
+	// If AD user auth is enabled for SMTP, we need their raw password for SMTP later.
+	// As the session secret encrypts the cookie data automatically by gorilla/sessions
+	// we store it here.
+	if a.cfg.SMTPUserAuth {
+		sess.Values["smtp_password"] = password
+	}
+
 	sess.Options = &sessions.Options{
 		Path:     "/",
 		MaxAge:   86400 * 7, // 7 days
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
+		Secure:   shouldUseSecureCookie(r, a.cfg), // Auto-detect da X-Forwarded-Proto o config
 	}
 	if err := sess.Save(r, w); err != nil {
 		log.Printf("session save: %v", err)
@@ -434,6 +456,18 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		passwordHash = string(hash)
 	}
 
+	shareEmail := strings.TrimSpace(r.FormValue("share_email"))
+
+	var userEmail string
+	var userPassword string
+	if a.cfg.SMTPUserAuth && shareEmail != "" {
+		sess, _ := a.store.Get(r, sessionName)
+		userEmail = username
+		if pwd, ok := sess.Values["smtp_password"].(string); ok {
+			userPassword = pwd
+		}
+	}
+
 	file, header, err := r.FormFile("file")
 	if err != nil {
 		http.Error(w, "no file uploaded", http.StatusBadRequest)
@@ -495,6 +529,15 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	downloadURL := fmt.Sprintf("%s/d/%s", a.publicBaseURL(r), share.Token)
+
+	if shareEmail != "" {
+		go func() {
+			err := email.SendShareEmail(shareEmail, downloadURL, originalName, days, passwordHash != "", username, a.cfg, userEmail, userPassword)
+			if err != nil {
+				log.Printf("failed to send share email to %s: %v", shareEmail, err)
+			}
+		}()
+	}
 
 	// Return HTMX response: a success card
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
@@ -703,13 +746,7 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 					MaxAge:   86400 * 7, // 7 days
 					HttpOnly: true,
 					SameSite: http.SameSiteLaxMode,
-					Secure:   false,
-				}
-
-				if err := sess.Save(r, w); err != nil {
-					log.Printf("save session: %v", err)
-					http.Error(w, "server error", 500)
-					return
+				Secure:   shouldUseSecureCookie(r, a.cfg), // Auto-detect da X-Forwarded-Proto o config
 				}
 
 				http.Redirect(w, r, "/d/"+token, http.StatusSeeOther)
@@ -1027,6 +1064,23 @@ func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessi
 	}
 	username := a.getUsername(r)
 
+	var reqPayload struct {
+		ShareEmail string `json:"share_email"`
+	}
+	// It's acceptable if jsondecode fails, e.g. empty body
+	_ = jsonDecode(r, &reqPayload)
+	shareEmail := strings.TrimSpace(reqPayload.ShareEmail)
+
+	var userEmail string
+	var userPassword string
+	if a.cfg.SMTPUserAuth && shareEmail != "" {
+		sess, _ := a.store.Get(r, sessionName)
+		userEmail = username
+		if pwd, ok := sess.Values["smtp_password"].(string); ok {
+			userPassword = pwd
+		}
+	}
+
 	sess, err := a.db.GetUploadSession(sessionToken)
 	if err != nil {
 		jsonResponse(w, http.StatusNotFound, jsonObj{"error": "session_not_found"})
@@ -1097,6 +1151,16 @@ func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessi
 	}
 
 	downloadURL := fmt.Sprintf("%s/d/%s", a.publicBaseURL(r), share.Token)
+
+	if shareEmail != "" {
+		go func() {
+			err := email.SendShareEmail(shareEmail, downloadURL, sess.OriginalName, sess.Days, sess.PasswordHash != "", username, a.cfg, userEmail, userPassword)
+			if err != nil {
+				log.Printf("failed to send chunked share email to %s: %v", shareEmail, err)
+			}
+		}()
+	}
+
 	jsonResponse(w, http.StatusOK, jsonObj{
 		"token":        shareToken,
 		"download_url": downloadURL,
@@ -1197,10 +1261,21 @@ func main() {
 		log.Fatalf("init db: %v", err)
 	}
 
+	// ── Cookie store con crittografia dual-key ──────────────────────────────────
+	// Chiave 1: HMAC authentication (64 bytes)
+	// Chiave 2: AES encryption (32 bytes)
+	authKey := []byte(cfg.SessionSecret)
+	if len(authKey) < 32 {
+		// Pad to minimum 32 bytes if SESSION_SECRET is too short
+		authKey = append(authKey, make([]byte, 32-len(authKey))...)
+	}
+	// Derive encryption key from session secret
+	encKey := sha256.Sum256([]byte(cfg.SessionSecret + "-encryption"))
+
 	app := &App{
 		cfg:   cfg,
 		db:    db,
-		store: sessions.NewCookieStore([]byte(cfg.SessionSecret)),
+		store: sessions.NewCookieStore(authKey, encKey[:]),
 	}
 
 	// Detect web directory (supports both dev and container layout)

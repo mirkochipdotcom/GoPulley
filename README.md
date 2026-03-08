@@ -116,6 +116,7 @@ Copy `.env.example` to `.env` and adjust values.
 ### Important variables
 
 - `SESSION_SECRET`
+- `SECURE_COOKIES`
 - `LDAP_HOST`, `LDAP_BASE_DN`, `LDAP_USER_DN_TEMPLATE`
 - `LDAP_REQUIRED_GROUP`, `LDAP_ADMIN_GROUP`, `ADMIN_USERS`, `LDAP_TLS_SKIP_VERIFY`
 - `MAX_GLOBAL_DAYS`, `MAX_UPLOAD_SIZE_MB`, `USER_QUOTA_MB`
@@ -133,6 +134,54 @@ Copy `.env.example` to `.env` and adjust values.
 
 - Optional password at upload time
 - Optional max download count ("burn after N downloads")
+
+### Email behavior
+
+- SMTP link sharing is configured via `SMTP_SERVER`, `SMTP_PORT`, `SMTP_SECURITY`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM`
+- `SMTP_USER_AUTH=true`: uses authenticated AD user email/password for sending (where supported)
+- `SMTP_USER_AUTH=false`: uses shared SMTP sender credentials and messages should be treated as **non-monitored mailbox** (no-reply)
+
+### Session cookie security
+
+To protect credentials stored in session cookies (when `SMTP_USER_AUTH=true`), GoPulley implements:
+
+- **Dual-key encryption**: cookies encrypted with AES-256 using a key derived from `SESSION_SECRET`
+- **Dynamic `Secure` flag**: automatic protocol detection via `X-Forwarded-Proto` header
+
+#### HTTPS Reverse Proxy (recommended configuration)
+
+GoPulley automatically detects if the original request was HTTPS by reading the `X-Forwarded-Proto` header set by the reverse proxy:
+
+```nginx
+# Nginx example
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+```yaml
+# Traefik example (automatic with entryPoints)
+labels:
+  - "traefik.http.routers.gopulley.entrypoints=websecure"
+  - "traefik.http.routers.gopulley.tls=true"
+```
+
+With this configuration:
+- **Browser → Reverse Proxy**: HTTPS (TLS terminated at proxy)
+- **Reverse Proxy → GoPulley**: HTTP local (trusted network)
+- **Cookie `Secure` flag**: automatically `true` because `X-Forwarded-Proto: https`
+
+#### Fallback configuration
+
+If the `X-Forwarded-Proto` header is not present (direct access without reverse proxy), GoPulley uses the `SECURE_COOKIES` variable:
+
+```env
+# Direct HTTPS access to the app (no reverse proxy)
+SECURE_COOKIES=true
+
+# Direct HTTP access (local testing only - NOT for production)
+SECURE_COOKIES=false
+```
+
+**Note**: in production with a properly configured HTTPS reverse proxy, `SECURE_COOKIES` is ignored and the `Secure` flag is set automatically.
 
 ### LDAP examples
 

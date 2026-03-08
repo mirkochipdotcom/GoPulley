@@ -52,6 +52,20 @@ type Config struct {
 	UploadSessionTTLHours int
 	// MaxUploadSessionsPerUser: concurrent in-progress upload sessions allowed per user.
 	MaxUploadSessionsPerUser int
+
+	// SecureCookies: se true (default), imposta il flag Secure sui cookie di sessione,
+	// richiedendo HTTPS. Impostare a false solo se dietro reverse proxy che termina TLS.
+	SecureCookies bool
+
+	// SMTP configuration for sending share links via email
+	SMTPServer   string
+	SMTPPort     int
+	// SMTPSecurity controls transport mode: auto|starttls|ssl|none.
+	SMTPSecurity string
+	SMTPUser     string
+	SMTPPassword string
+	SMTPFrom     string
+	SMTPUserAuth bool
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -81,6 +95,15 @@ func Load() *Config {
 		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 10)),
 		UploadSessionTTLHours:    getEnvInt("UPLOAD_SESSION_TTL_HOURS", 24),
 		MaxUploadSessionsPerUser: getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 3),
+		SecureCookies:            getEnvBool("SECURE_COOKIES", true),
+
+		SMTPServer:   getEnv("SMTP_SERVER", ""),
+		SMTPPort:     getEnvInt("SMTP_PORT", 587),
+		SMTPSecurity: strings.ToLower(getEnv("SMTP_SECURITY", "auto")),
+		SMTPUser:     getEnv("SMTP_USER", ""),
+		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
+		SMTPFrom:     getEnv("SMTP_FROM", ""),
+		SMTPUserAuth: getEnvBool("SMTP_USER_AUTH", false),
 	}
 }
 

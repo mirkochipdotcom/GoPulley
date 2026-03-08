@@ -116,6 +116,7 @@ Copia `.env.example` in `.env` e personalizza i valori.
 ### Variabili importanti
 
 - `SESSION_SECRET`
+- `SECURE_COOKIES`
 - `LDAP_HOST`, `LDAP_BASE_DN`, `LDAP_USER_DN_TEMPLATE`
 - `LDAP_REQUIRED_GROUP`, `LDAP_ADMIN_GROUP`, `ADMIN_USERS`, `LDAP_TLS_SKIP_VERIFY`
 - `MAX_GLOBAL_DAYS`, `MAX_UPLOAD_SIZE_MB`, `USER_QUOTA_MB`
@@ -133,6 +134,69 @@ Copia `.env.example` in `.env` e personalizza i valori.
 
 - Password opzionale in fase di upload
 - Limite massimo download opzionale ("burn after N downloads")
+
+### Comportamento email
+
+GoPulley invia le notifiche email in base alla configurazione SMTP nel file `.env`:
+
+- `SMTP_HOST`, `SMTP_PORT`: server SMTP e porta
+- `SMTP_SECURITY`: `auto`, `starttls`, `ssl`, `none`
+- `SMTP_FROM`: mittente visualizzato
+- `SMTP_USER_AUTH`: controlla il tipo di autenticazione SMTP
+
+Quando `SMTP_USER_AUTH=true`:
+
+- GoPulley usa credenziali SMTP dell'utente autenticato (se fornite dal flusso applicativo/relay)
+- il mittente e la tracciabilita sono personali per utente
+
+Quando `SMTP_USER_AUTH=false`:
+
+- GoPulley usa l'account SMTP condiviso configurato lato server
+- la casella usata per l'invio puo essere considerata "no-reply" / non presidiata
+
+Nota operativa: in ambienti enterprise e consigliato usare relay SMTP interni con TLS obbligatorio e policy antispam lato infrastruttura.
+
+### Sicurezza cookie sessione
+
+Per proteggere le credenziali memorizzate nella sessione (quando `SMTP_USER_AUTH=true`), GoPulley implementa:
+
+- **Crittografia dual-key**: cookie crittografati con AES-256 usando chiave derivata da `SESSION_SECRET`
+- **Flag `Secure` dinamico**: rilevamento automatico del protocollo tramite `X-Forwarded-Proto` header
+
+#### Reverse Proxy HTTPS (configurazione raccomandata)
+
+GoPulley rileva automaticamente se la richiesta originale era HTTPS leggendo l'header `X-Forwarded-Proto` impostato dal reverse proxy:
+
+```nginx
+# Esempio Nginx
+proxy_set_header X-Forwarded-Proto $scheme;
+```
+
+```yaml
+# Esempio Traefik (automatico con entryPoints)
+labels:
+  - "traefik.http.routers.gopulley.entrypoints=websecure"
+  - "traefik.http.routers.gopulley.tls=true"
+```
+
+Con questa configurazione:
+- **Browser → Reverse Proxy**: HTTPS (TLS terminato sul proxy)
+- **Reverse Proxy → GoPulley**: HTTP locale (rete fidata)
+- **Cookie flag `Secure`**: automaticamente `true` perché `X-Forwarded-Proto: https`
+
+#### Configurazione fallback
+
+Se l'header `X-Forwarded-Proto` non è presente (accesso diretto senza reverse proxy), GoPulley usa la variabile `SECURE_COOKIES`:
+
+```env
+# Accesso diretto HTTPS all'app (senza reverse proxy)
+SECURE_COOKIES=true
+
+# Accesso diretto HTTP (solo per test locali - NON in produzione)
+SECURE_COOKIES=false
+```
+
+**Nota**: in produzione con reverse proxy HTTPS correttamente configurato, `SECURE_COOKIES` viene ignorato e il flag `Secure` è impostato automaticamente.
 
 ### Esempi LDAP
 
