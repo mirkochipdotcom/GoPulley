@@ -887,9 +887,13 @@ a:hover {
 }
 
 .input-group-download {
-  flex: 0 0 96px;
-  min-width: 96px;
-  max-width: 96px;
+  flex: 0 0 132px;
+  min-width: 132px;
+  max-width: 132px;
+}
+
+.input-group-download label {
+  white-space: nowrap;
 }
 
 .input-group-email {
