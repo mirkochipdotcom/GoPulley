@@ -855,13 +855,14 @@ a:hover {
   overflow: hidden;
   max-height: 0;
   opacity: 0;
-  transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+  transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease, margin-bottom 0.3s ease;
 }
 
 .advanced-options-content.show {
   max-height: 200px;
   opacity: 1;
   margin-top: 1rem;
+  margin-bottom: 1.25rem;
 }
 
 .advanced-inputs {
@@ -883,7 +884,7 @@ a:hover {
 
 /* Password and download limit should stay compact, email needs more room. */
 .input-group-compact {
-  flex: 0 1 180px;
+  flex: 0 1 160px;
 }
 
 .input-group-download {
@@ -897,8 +898,8 @@ a:hover {
 }
 
 .input-group-email {
-  flex: 4 1 460px;
-  min-width: 320px;
+  flex: 3 1 280px;
+  min-width: 280px;
 }
 
 #max-downloads {
