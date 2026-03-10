@@ -1418,10 +1418,6 @@ func main() {
 			http.Error(w, "not found", 404)
 		}
 	}))
-
-	// Admin Panel route
-	mux.HandleFunc("/admin", app.requireAuth(app.requireAdmin(app.handleAdminDashboard)))
-
 	if cfg.LDAPHost == "mock" {
 		log.Printf("[WARN] RUNNING IN MOCK MODE - any credentials accepted")
 	}
