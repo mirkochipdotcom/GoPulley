@@ -136,10 +136,12 @@
                             <input type="number" id="max-downloads" name="max_downloads" placeholder="{{t "dashboard.download_limit_placeholder"}}" title="{{t "dashboard.download_limit_hint"}}"
                                 min="0">
                         </div>
+                        {{if .EmailEnabled}}
                         <div class="input-group input-group-email">
                             <label for="share-email">{{t "dashboard.email_to"}}</label>
                             <input type="email" id="share-email" name="share_email" placeholder="{{t "dashboard.email_to_placeholder"}}" title="{{t "dashboard.email_to_hint"}}">
                         </div>
+                        {{end}}
                     </div>
                 </div>
 
@@ -555,7 +557,8 @@
 
             // 5. Complete
             try {
-                const shareEmail = document.getElementById('share-email').value;
+                const shareEmailInput = document.getElementById('share-email');
+                const shareEmail = shareEmailInput ? shareEmailInput.value : '';
                 const completeResp = await fetch('/api/upload/' + session + '/complete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },

@@ -312,6 +312,7 @@ type dashData struct {
 	Username     string
 	IsAdmin      bool
 	Shares       []*database.Share
+	EmailEnabled bool
 	EnableSHA    bool
 	MaxDays      int
 	BaseURL      string
@@ -355,6 +356,7 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Username:     username,
 		IsAdmin:      isAdmin,
 		Shares:       shares,
+		EmailEnabled: strings.TrimSpace(a.cfg.SMTPServer) != "",
 		EnableSHA:    a.cfg.EnableSHA256,
 		MaxDays:      a.cfg.MaxGlobalDays,
 		BaseURL:      baseURL,
@@ -746,7 +748,7 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 					MaxAge:   86400 * 7, // 7 days
 					HttpOnly: true,
 					SameSite: http.SameSiteLaxMode,
-				Secure:   shouldUseSecureCookie(r, a.cfg), // Auto-detect da X-Forwarded-Proto o config
+					Secure:   shouldUseSecureCookie(r, a.cfg), // Auto-detect da X-Forwarded-Proto o config
 				}
 
 				http.Redirect(w, r, "/d/"+token, http.StatusSeeOther)
