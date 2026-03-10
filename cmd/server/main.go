@@ -1348,6 +1348,7 @@ func main() {
 	})
 	mux.HandleFunc("/logout", app.handleLogout)
 	mux.HandleFunc("/dashboard", app.requireAuth(app.handleDashboard))
+	mux.HandleFunc("/admin", app.requireAuth(app.requireAdmin(app.handleAdminDashboard)))
 	mux.HandleFunc("/upload", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", 405)
