@@ -214,7 +214,7 @@ func Authenticate(username, password string, cfg *config.Config) (bool, bool, er
 		}
 	}
 
-	if !hasRequiredGroup {
+	if !hasRequiredGroup && !isAdmin {
 		return false, false, fmt.Errorf("ldap: user %q authenticated but not in required group %q (direct or nested)", username, cfg.LDAPRequiredGroup)
 	}
 
