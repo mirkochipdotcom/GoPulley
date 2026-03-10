@@ -20,6 +20,8 @@ type Config struct {
 	// LDAPTLSSkipVerify: impostare a true solo per DC con certificato self-signed.
 	// Mai usare in produzione con certificati validi.
 	LDAPTLSSkipVerify bool
+	// LDAPStartTLS: se true (default), tenta l'upgrade StartTLS su connessioni ldap://
+	LDAPStartTLS bool
 	// LDAPBindDN + LDAPBindPassword: service account used for group-membership searches.
 	// If empty, the user's own authenticated session is reused.
 	LDAPBindDN       string
@@ -58,8 +60,8 @@ type Config struct {
 	SecureCookies bool
 
 	// SMTP configuration for sending share links via email
-	SMTPServer   string
-	SMTPPort     int
+	SMTPServer string
+	SMTPPort   int
 	// SMTPSecurity controls transport mode: auto|starttls|ssl|none.
 	SMTPSecurity string
 	SMTPUser     string
@@ -79,6 +81,7 @@ func Load() *Config {
 		LDAPBaseDN:               getEnv("LDAP_BASE_DN", "dc=example,dc=com"),
 		LDAPUserDNTemplate:       getEnv("LDAP_USER_DN_TEMPLATE", "uid=%s,ou=Users,dc=example,dc=com"),
 		LDAPTLSSkipVerify:        getEnvBool("LDAP_TLS_SKIP_VERIFY", false),
+		LDAPStartTLS:             getEnvBool("LDAP_STARTTLS", true),
 		LDAPBindDN:               getEnv("LDAP_BIND_DN", ""),
 		LDAPBindPassword:         getEnv("LDAP_BIND_PASSWORD", ""),
 		LDAPRequiredGroup:        getEnv("LDAP_REQUIRED_GROUP", ""),
