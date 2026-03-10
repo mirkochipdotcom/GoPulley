@@ -91,79 +91,91 @@
                 <p style="color: var(--c-text-2); margin-top: 1rem;">{{t "admin.empty_state"}}</p>
             </div>
             {{else}}
-            <div class="shares-table-wrap">
-                <table class="shares-table">
-                    <thead>
-                        <tr>
-                            <th>{{t "admin.col_id_name"}}</th>
-                            <th>{{t "admin.col_uploader"}}</th>
-                            <th>{{t "admin.col_size"}}</th>
-                            <th>{{t "admin.col_uploaded"}}</th>
-                            <th>{{t "admin.col_expiry_limits"}}</th>
-                            <th>{{t "admin.col_actions"}}</th>
-                        </tr>
-                    </thead>
-                    <tbody id="admin-shares-list">
-                        {{range .Files}}
-                        <tr id="share-{{.Token}}">
-                            <td class="admin-secret-cell">
-                                <strong class="admin-secret-badge" title="{{t "admin.secret_id"}}: {{.Token}}">
-                                    <span class="admin-secret-lock" aria-hidden="true">
-                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                            stroke-linecap="round" stroke-linejoin="round">
-                                            <rect x="3" y="11" width="18" height="10" rx="2" ry="2"></rect>
-                                            <path d="M7 11V8a5 5 0 0 1 10 0v3"></path>
-                                        </svg>
-                                    </span>
-                                    [{{t "admin.hidden"}}]
-                                </strong>
-                                {{if .PasswordHash}}
-                                <span class="admin-password-badge" title="{{t "admin.password_protected"}}" aria-label="{{t "admin.password_protected"}}">
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                                        stroke-linecap="round" stroke-linejoin="round">
-                                        <circle cx="7" cy="15" r="4"></circle>
-                                        <path d="M11 15h10"></path>
-                                        <path d="M18 12v6"></path>
-                                    </svg>
-                                </span>
-                                {{end}}
-                            </td>
-                            <td>
-                                <strong style="color: var(--c-accent);">{{.Uploader}}</strong>
-                            </td>
-                            <td>{{humanSize .SizeBytes}}</td>
-                            <td><span title="{{fmtDate .CreatedAt}}">{{daysAgo .CreatedAt}}</span></td>
-                            <td>
-                                {{if isExpired .ExpiresAt}}
-                                <span style="color: var(--c-danger);">{{t "admin.expired"}}</span>
-                                {{else}}
-                                <span style="color: var(--c-text-2);">{{daysLeft .ExpiresAt}}</span>
-                                {{end}}
-                                {{if gt .MaxDownloads 0}}
-                                <br><small style="color: var(--c-warn);">{{t "admin.max_dl"}}:
-                                    {{.Downloaded}}/{{.MaxDownloads}}</small>
-                                {{else}}
-                                <br><small style="color: var(--c-text-3);">{{t "admin.dl"}}: {{.Downloaded}}</small>
-                                {{end}}
-                            </td>
-                            <td>
-                                <div style="display: flex; gap: 0.5rem; align-items: center;">
-                                    <button class="btn btn-danger btn-xs" hx-delete="/share/{{.Token}}"
-                                        hx-target="#share-{{.Token}}" hx-swap="delete"
-                                        hx-confirm="{{t "admin.force_delete_confirm" .Uploader}}">
-                                        {{t "admin.delete"}}
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {{end}}
-                    </tbody>
-                </table>
-            </div>
+            <h3 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--c-text-1);">{{t "admin.top_largest"}}</h3>
+            {{template "fileTable" .LargestFiles}}
+
+            <h3 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--c-text-1);">{{t "admin.top_longest_expiration"}}</h3>
+            {{template "fileTable" .LongestExpirationFiles}}
+
+            <h3 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--c-text-1);">{{t "admin.all_files"}}</h3>
+            {{template "fileTable" .Files}}
+
             <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--c-text-2); text-align: center;">{{t "admin.privacy_note"}}</p>
             {{end}}
         </section>
     </main>
+
+{{define "fileTable"}}
+<div class="shares-table-wrap" style="margin-bottom: 2rem;">
+    <table class="shares-table">
+        <thead>
+            <tr>
+                <th>{{t "admin.col_id_name"}}</th>
+                <th>{{t "admin.col_uploader"}}</th>
+                <th>{{t "admin.col_size"}}</th>
+                <th>{{t "admin.col_uploaded"}}</th>
+                <th>{{t "admin.col_expiry_limits"}}</th>
+                <th>{{t "admin.col_actions"}}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .}}
+            <tr id="share-{{.Token}}">
+                <td class="admin-secret-cell">
+                    <strong class="admin-secret-badge" title="{{t "admin.secret_id"}}: {{.Token}}">
+                        <span class="admin-secret-lock" aria-hidden="true">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                                stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="10" rx="2" ry="2"></rect>
+                                <path d="M7 11V8a5 5 0 0 1 10 0v3"></path>
+                            </svg>
+                        </span>
+                        [{{t "admin.hidden"}}]
+                    </strong>
+                    {{if .PasswordHash}}
+                    <span class="admin-password-badge" title="{{t "admin.password_protected"}}" aria-label="{{t "admin.password_protected"}}">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                            stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="7" cy="15" r="4"></circle>
+                            <path d="M11 15h10"></path>
+                            <path d="M18 12v6"></path>
+                        </svg>
+                    </span>
+                    {{end}}
+                </td>
+                <td>
+                    <strong style="color: var(--c-accent);">{{.Uploader}}</strong>
+                </td>
+                <td>{{humanSize .SizeBytes}}</td>
+                <td><span title="{{fmtDate .CreatedAt}}">{{daysAgo .CreatedAt}}</span></td>
+                <td>
+                    {{if isExpired .ExpiresAt}}
+                    <span style="color: var(--c-danger);">{{t "admin.expired"}}</span>
+                    {{else}}
+                    <span style="color: var(--c-text-2);">{{daysLeft .ExpiresAt}}</span>
+                    {{end}}
+                    {{if gt .MaxDownloads 0}}
+                    <br><small style="color: var(--c-warn);">{{t "admin.max_dl"}}:
+                        {{.Downloaded}}/{{.MaxDownloads}}</small>
+                    {{else}}
+                    <br><small style="color: var(--c-text-3);">{{t "admin.dl"}}: {{.Downloaded}}</small>
+                    {{end}}
+                </td>
+                <td>
+                    <div style="display: flex; gap: 0.5rem; align-items: center;">
+                        <button class="btn btn-danger btn-xs" hx-delete="/share/{{.Token}}"
+                            hx-target="#share-{{.Token}}" hx-swap="delete"
+                            hx-confirm="{{t "admin.force_delete_confirm" .Uploader}}">
+                            {{t "admin.delete"}}
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
 </body>
 
 </html>

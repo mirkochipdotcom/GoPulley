@@ -385,15 +385,17 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin
 type adminDashData struct {
-	Username     string
-	Version      string
-	BrandName    string
-	BrandLogo    string
-	Files        []*database.Share
-	TotalSpace   int64
-	FreeSpace    int64
-	UsedSpace    int64
-	SpacePercent int
+	Username               string
+	Version                string
+	BrandName              string
+	BrandLogo              string
+	Files                  []*database.Share
+	LargestFiles           []*database.Share
+	LongestExpirationFiles []*database.Share
+	TotalSpace             int64
+	FreeSpace              int64
+	UsedSpace              int64
+	SpacePercent           int
 }
 
 func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
@@ -405,6 +407,18 @@ func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		logger.Error("list all shares error: %v", err)
 		files = nil
+	}
+
+	largestFiles, err := a.db.ListTopSharesBySize(10)
+	if err != nil {
+		logger.Error("list top shares by size error: %v", err)
+		largestFiles = nil
+	}
+
+	longestExpirationFiles, err := a.db.ListTopSharesByFurthestExpiration(10)
+	if err != nil {
+		logger.Error("list top shares by expiration error: %v", err)
+		longestExpirationFiles = nil
 	}
 
 	// Calculate /data disk space
@@ -423,15 +437,17 @@ func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.render(w, r, "admin", adminDashData{
-		Username:     username,
-		Version:      AppVersion,
-		BrandName:    a.cfg.BrandName,
-		BrandLogo:    a.cfg.BrandLogoPath,
-		Files:        files,
-		TotalSpace:   totalSpace,
-		FreeSpace:    freeSpace,
-		UsedSpace:    usedSpace,
-		SpacePercent: spacePercent,
+		Username:               username,
+		Version:                AppVersion,
+		BrandName:              a.cfg.BrandName,
+		BrandLogo:              a.cfg.BrandLogoPath,
+		Files:                  files,
+		LargestFiles:           largestFiles,
+		LongestExpirationFiles: longestExpirationFiles,
+		TotalSpace:             totalSpace,
+		FreeSpace:              freeSpace,
+		UsedSpace:              usedSpace,
+		SpacePercent:           spacePercent,
 	})
 }
 

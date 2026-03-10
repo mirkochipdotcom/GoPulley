@@ -207,6 +207,48 @@ func (db *DB) ListAllShares() ([]*Share, error) {
 	return shares, rows.Err()
 }
 
+// ListTopSharesBySize returns the top N largest shares in the database.
+func (db *DB) ListTopSharesBySize(limit int) ([]*Share, error) {
+	rows, err := db.conn.Query(
+		`SELECT id, token, file_path, original_name, size_bytes, uploader, created_at, expires_at, downloaded, sha256, password_hash, max_downloads
+		 FROM shares ORDER BY size_bytes DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var shares []*Share
+	for rows.Next() {
+		s, err := scanShareRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		shares = append(shares, s)
+	}
+	return shares, rows.Err()
+}
+
+// ListTopSharesByFurthestExpiration returns the top N shares with the longest expiration time.
+func (db *DB) ListTopSharesByFurthestExpiration(limit int) ([]*Share, error) {
+	rows, err := db.conn.Query(
+		`SELECT id, token, file_path, original_name, size_bytes, uploader, created_at, expires_at, downloaded, sha256, password_hash, max_downloads
+		 FROM shares ORDER BY expires_at DESC LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var shares []*Share
+	for rows.Next() {
+		s, err := scanShareRow(rows)
+		if err != nil {
+			return nil, err
+		}
+		shares = append(shares, s)
+	}
+	return shares, rows.Err()
+}
+
 // GetUserTotalBytes calculates the sum of all size_bytes for a specific user.
 func (db *DB) GetUserTotalBytes(uploader string) (int64, error) {
 	var total sql.NullInt64
