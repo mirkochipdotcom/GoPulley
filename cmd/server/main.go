@@ -254,13 +254,24 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	ok, isAdmin, err := auth.Authenticate(username, password, a.cfg)
 	if err != nil {
-		log.Printf("auth error for %s: %v", username, err)
 		w.Header().Set("HX-Reswap", "outerHTML")
+		// Se l'errore indica che le policy sono fallite o l'utente non c'è, è un auth failure, non un errore di rete
+		if strings.Contains(err.Error(), "not in required group") {
+			log.Printf("login failed for %s: unauthorized (not in required group '%s')", username, a.cfg.LDAPRequiredGroup)
+			a.renderError(w, r, "login.err_invalid")
+			return
+		} else if strings.Contains(err.Error(), "not found under base DN") {
+			log.Printf("login failed for %s: user not found in directory", username)
+			a.renderError(w, r, "login.err_invalid")
+			return
+		}
+
+		log.Printf("ldap connection/bind error for %s: %v", username, err)
 		a.renderError(w, r, "login.err_ldap")
 		return
 	}
 	if !ok {
-		log.Printf("login failed for %s: invalid credentials or not in required group", username)
+		log.Printf("login failed for %s: invalid credentials", username)
 		w.Header().Set("HX-Reswap", "outerHTML")
 		// HTMX drops 4xx/5xx by default. We return 200 so the error message is displayed.
 		a.renderError(w, r, "login.err_invalid")
