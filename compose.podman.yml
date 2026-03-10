@@ -1,0 +1,24 @@
+# GoPulley — Podman rootless override (keep-id mode)
+#
+# Utilizzo / Usage:
+#   podman compose -f compose.yml -f compose.podman.yml up -d
+#
+# Questo file abilita l'esecuzione rootless "keep-id":
+#   - userns_mode: keep-id  →  mappa il tuo UID host allo stesso UID nel container
+#   - user: UID:GID         →  il processo gira con il tuo UID, che già possiede ./data
+#   - volume :U             →  Podman riallinea i permessi della directory montata
+#
+# This file enables rootless "keep-id" execution:
+#   - userns_mode: keep-id  →  maps your host UID to the same UID inside the container
+#   - user: UID:GID         →  the process runs as your UID, which already owns ./data
+#   - volume :U             →  Podman re-aligns ownership of the mounted directory
+#
+# Con questo approccio la directory ./data rimane di tua proprietà sul filesystem host.
+# With this approach the ./data directory stays owned by you on the host filesystem.
+
+services:
+  gopulley:
+    userns_mode: keep-id
+    user: "${UID:-1000}:${GID:-1000}"
+    volumes:
+      - ${DATA_DIR:-./data}:/data:rw,Z,U

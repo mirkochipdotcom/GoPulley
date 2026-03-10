@@ -96,6 +96,36 @@ Con Docker il flusso e identico (`docker compose ...`).
 
 ---
 
+## Podman rootless
+
+GoPulley supporta Podman rootless nativamente.
+L'entrypoint del container rileva quando viene avviato come root nel user namespace
+(comportamento rootless standard), corregge i permessi di `/data` e poi abbassa i
+privilegi all'utente `gopulley` (UID 1001) prima di avviare l'applicazione.
+
+### Consigliato: modalità keep-id (approccio più pulito)
+
+Con `keep-id` il tuo UID host viene preservato all'interno del container e la directory
+dati rimane di tua proprietà sul filesystem host.
+
+```bash
+# Scarica il file di override Podman oltre a compose.yml
+curl -O https://raw.githubusercontent.com/mirkochipdotcom/GoPulley/main/compose.podman.yml
+
+# Esporta il tuo UID/GID in modo che compose.podman.yml possa leggerli, poi avvia
+export UID=$(id -u) GID=$(id -g)
+podman compose -f compose.yml -f compose.podman.yml up -d
+```
+
+### Rootless standard (nessun file extra necessario)
+
+Se esegui semplicemente `podman compose up -d` senza l'override, l'entrypoint corregge
+automaticamente i permessi di `/data` all'avvio. Funziona correttamente, ma la directory
+host `./data` verrà riassegnata a un sub-UID (la mappatura del user namespace rootless di
+Podman). Per navigare la directory dati dall'host in seguito, usa `podman unshare ls ./data`.
+
+---
+
 ## Directory dati
 
 Di default i dati host sono mappati su `./data`.

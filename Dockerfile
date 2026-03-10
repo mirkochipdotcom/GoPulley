@@ -28,7 +28,7 @@ RUN VERSION=$(cat /build/VERSION | tr -d '[:space:]') && \
 # alpine gives us CA certs (needed for LDAPS) and a minimal libc
 FROM alpine:3.19
 
-RUN apk add --no-cache ca-certificates tzdata \
+RUN apk add --no-cache ca-certificates tzdata su-exec \
   && adduser -D -u 1001 gopulley \
   && mkdir -p /data/uploads \
   && chown -R gopulley:gopulley /data
@@ -41,13 +41,15 @@ COPY --from=builder /build/gopulley .
 # Copy web assets (templates + static files)
 COPY --chown=gopulley:gopulley web/ ./web/
 
+# Entrypoint: fixes /data ownership when started as root (Docker / Podman rootless
+# without keep-id), then drops privileges to gopulley (UID 1001).
+COPY entrypoint.sh .
+RUN chmod +x /app/entrypoint.sh
+
 # Data volumes: SQLite DB and uploaded files
 # Mount these as Docker/Podman volumes in production
 VOLUME ["/data"]
 
-# Run as non-root
-USER gopulley
-
 EXPOSE 8080
 
-ENTRYPOINT ["/app/gopulley"]
+ENTRYPOINT ["/app/entrypoint.sh"]
