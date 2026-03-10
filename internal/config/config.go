@@ -68,6 +68,9 @@ type Config struct {
 	SMTPPassword string
 	SMTPFrom     string
 	SMTPUserAuth bool
+
+	// LogLevel controls the application logging verbosity (debug, info, warn, error)
+	LogLevel string
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -107,6 +110,8 @@ func Load() *Config {
 		SMTPPassword: getEnv("SMTP_PASSWORD", ""),
 		SMTPFrom:     getEnv("SMTP_FROM", ""),
 		SMTPUserAuth: getEnvBool("SMTP_USER_AUTH", false),
+
+		LogLevel: strings.ToLower(getEnv("LOG_LEVEL", "info")),
 	}
 }
 

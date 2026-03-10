@@ -20,6 +20,7 @@ import (
 	"github.com/youorg/gopulley/internal/database"
 	"github.com/youorg/gopulley/internal/email"
 	"github.com/youorg/gopulley/internal/i18n"
+	"github.com/youorg/gopulley/internal/logger"
 	"github.com/youorg/gopulley/internal/storage"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -172,7 +173,7 @@ func (a *App) render(w http.ResponseWriter, r *http.Request, name string, data a
 	localized = localized.Funcs(a.localizedTemplateFuncs(locale))
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := localized.ExecuteTemplate(w, name+".html", data); err != nil {
-		log.Printf("render %s: %v", name, err)
+		logger.Error("render %s: %v", name, err)
 	}
 }
 
@@ -250,33 +251,35 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 	username := strings.TrimSpace(r.FormValue("username"))
 	password := r.FormValue("password")
 
-	log.Printf("📥 Received login request for: %s", username)
+	logger.Debug("📥 Received login request for: %s", username)
 
 	ok, isAdmin, err := auth.Authenticate(username, password, a.cfg)
 	if err != nil {
 		w.Header().Set("HX-Reswap", "outerHTML")
 		// Se l'errore indica che le policy sono fallite o l'utente non c'è, è un auth failure, non un errore di rete
 		if strings.Contains(err.Error(), "not in required group") {
-			log.Printf("login failed for %s: unauthorized (not in required group '%s')", username, a.cfg.LDAPRequiredGroup)
+			logger.Warn("login failed for %s: unauthorized (not in required group '%s')", username, a.cfg.LDAPRequiredGroup)
 			a.renderError(w, r, "login.err_invalid")
 			return
 		} else if strings.Contains(err.Error(), "not found under base DN") {
-			log.Printf("login failed for %s: user not found in directory", username)
+			logger.Warn("login failed for %s: user not found in directory", username)
 			a.renderError(w, r, "login.err_invalid")
 			return
 		}
 
-		log.Printf("ldap connection/bind error for %s: %v", username, err)
+		logger.Error("ldap connection/bind error for %s: %v", username, err)
 		a.renderError(w, r, "login.err_ldap")
 		return
 	}
 	if !ok {
-		log.Printf("login failed for %s: invalid credentials", username)
+		logger.Warn("login failed for %s: invalid credentials", username)
 		w.Header().Set("HX-Reswap", "outerHTML")
 		// HTMX drops 4xx/5xx by default. We return 200 so the error message is displayed.
 		a.renderError(w, r, "login.err_invalid")
 		return
 	}
+
+	logger.Info("login successful for: %s (isAdmin: %t)", username, isAdmin)
 
 	sess, _ := a.store.Get(r, sessionName)
 	sess.Values["username"] = username
@@ -297,7 +300,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 		Secure:   shouldUseSecureCookie(r, a.cfg), // Auto-detect da X-Forwarded-Proto o config
 	}
 	if err := sess.Save(r, w); err != nil {
-		log.Printf("session save: %v", err)
+		logger.Error("session save: %v", err)
 	}
 
 	// HTMX redirect
@@ -342,7 +345,7 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 	shares, err := a.db.ListSharesByUser(username)
 	if err != nil {
-		log.Printf("list shares: %v", err)
+		logger.Error("list shares: %v", err)
 		shares = nil
 	}
 
@@ -357,7 +360,7 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 				quotaPercent = 100
 			}
 		} else {
-			log.Printf("get quota bytes error: %v", err)
+			logger.Error("get quota bytes error: %v", err)
 		}
 	}
 
@@ -400,7 +403,7 @@ func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	// Nota: qui chiameremo un nuovo metodo db.ListAllShares
 	files, err := a.db.ListAllShares()
 	if err != nil {
-		log.Printf("list all shares error: %v", err)
+		logger.Error("list all shares error: %v", err)
 		files = nil
 	}
 
@@ -416,7 +419,7 @@ func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 			spacePercent = 100
 		}
 	} else if err != nil {
-		log.Printf("disk usage error for %s: %v", dataPath, err)
+		logger.Error("disk usage error for %s: %v", dataPath, err)
 	}
 
 	a.render(w, r, "admin", adminDashData{
@@ -462,7 +465,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
-			log.Printf("bcrypt error: %v", err)
+			logger.Error("bcrypt error: %v", err)
 			http.Error(w, "server error (password)", 500)
 			return
 		}
@@ -492,7 +495,7 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if a.cfg.UserQuotaMB > 0 {
 		usedBytes, err := a.db.GetUserTotalBytes(username)
 		if err != nil {
-			log.Printf("quota check error: %v", err)
+			logger.Error("quota check error: %v", err)
 			http.Error(w, "server error (quota)", 500)
 			return
 		}
@@ -504,14 +507,14 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	// Ensure upload dir exists
 	if err := os.MkdirAll(a.cfg.UploadDir, 0750); err != nil {
-		log.Printf("mkdir uploads: %v", err)
+		logger.Error("mkdir uploads: %v", err)
 		http.Error(w, "server error", 500)
 		return
 	}
 
 	filePath, originalName, sizeBytes, err := storage.SaveFile(header, a.cfg.UploadDir)
 	if err != nil {
-		log.Printf("save file: %v", err)
+		logger.Error("save file: %v", err)
 		http.Error(w, "file save error", 500)
 		return
 	}
@@ -521,22 +524,24 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 
 	share, err := a.db.CreateShare(token, filePath, originalName, sizeBytes, username, expiresAt, "", passwordHash, maxDownloads)
 	if err != nil {
-		log.Printf("create share: %v", err)
+		logger.Error("create share: %v", err)
 		storage.DeleteFile(filePath)
 		http.Error(w, "database error", 500)
 		return
 	}
+
+	logger.Info("User %s uploaded file %s (size: %s, token: %s)", username, originalName, storage.HumanSize(sizeBytes), token)
 
 	if a.cfg.EnableSHA256 {
 		// Compute hash asynchronously to avoid blocking the upload response on large files.
 		go func(token, path string) {
 			hash, err := storage.ComputeSHA256(path)
 			if err != nil {
-				log.Printf("compute sha256 async (%s): %v", token, err)
+				logger.Error("compute sha256 async (%s): %v", token, err)
 				return
 			}
 			if err := a.db.SetShareSHA256(token, hash); err != nil {
-				log.Printf("store sha256 async (%s): %v", token, err)
+				logger.Error("store sha256 async (%s): %v", token, err)
 			}
 		}(share.Token, filePath)
 	}
@@ -547,7 +552,9 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			err := email.SendShareEmail(shareEmail, downloadURL, originalName, days, passwordHash != "", username, a.cfg, userEmail, userPassword)
 			if err != nil {
-				log.Printf("failed to send share email to %s: %v", shareEmail, err)
+				logger.Error("failed to send share email to %s: %v", shareEmail, err)
+			} else {
+				logger.Debug("share email successfully sent to %s", shareEmail)
 			}
 		}()
 	}
@@ -627,11 +634,11 @@ func (a *App) handleComputeShareSHA256(w http.ResponseWriter, r *http.Request, t
 	go func(token, path string) {
 		hash, err := storage.ComputeSHA256(path)
 		if err != nil {
-			log.Printf("compute sha256 on-demand (%s): %v", token, err)
+			logger.Error("compute sha256 on-demand (%s): %v", token, err)
 			return
 		}
 		if err := a.db.SetShareSHA256(token, hash); err != nil {
-			log.Printf("store sha256 on-demand (%s): %v", token, err)
+			logger.Error("store sha256 on-demand (%s): %v", token, err)
 		}
 	}(share.Token, share.FilePath)
 }
@@ -661,7 +668,7 @@ func (a *App) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 
 	storage.DeleteFile(share.FilePath)
 	if err := a.db.DeleteShare(token); err != nil {
-		log.Printf("delete share: %v", err)
+		logger.Error("delete share: %v", err)
 		http.Error(w, "database error", 500)
 		return
 	}
@@ -682,7 +689,7 @@ func (a *App) handleSharesList(w http.ResponseWriter, r *http.Request) {
 	locale := a.requestLocale(r)
 	localized, cloneErr := t.Clone()
 	if cloneErr != nil {
-		log.Printf("clone dashboard template: %v", cloneErr)
+		logger.Error("clone dashboard template: %v", cloneErr)
 		http.Error(w, "template error", 500)
 		return
 	}
@@ -693,7 +700,7 @@ func (a *App) handleSharesList(w http.ResponseWriter, r *http.Request) {
 		"EnableSHA": a.cfg.EnableSHA256,
 	})
 	if err != nil {
-		log.Printf("render shares-list: %v", err)
+		logger.Error("render shares-list: %v", err)
 	}
 }
 
@@ -725,7 +732,7 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 		if err == sql.ErrNoRows {
 			data.Error = i18n.T(locale, "download.link_not_found")
 		} else {
-			log.Printf("get share: %v", err)
+			logger.Error("get share: %v", err)
 			data.Error = i18n.T(locale, "download.internal_error")
 		}
 		a.render(w, r, "download", data)
@@ -744,7 +751,7 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 	if share.PasswordHash != "" && !data.Expired {
 		sess, err := a.store.Get(r, sessionName)
 		if err != nil {
-			log.Printf("get session: %v", err)
+			logger.Error("get session: %v", err)
 			sess, _ = a.store.New(r, sessionName)
 		}
 
@@ -800,7 +807,7 @@ func (a *App) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := storage.ServeFile(w, r, share.FilePath, share.OriginalName); err != nil {
-		log.Printf("serve file: %v", err)
+		logger.Error("serve file: %v", err)
 	}
 
 	a.db.IncrementDownload(token)
@@ -810,7 +817,7 @@ func (a *App) handleDownloadFile(w http.ResponseWriter, r *http.Request) {
 		go func() {
 			storage.DeleteFile(share.FilePath)
 			a.db.DeleteShare(token)
-			log.Printf("burned share %s after %d downloads", token, share.Downloaded+1)
+			logger.Info("burned share %s after %d downloads", token, share.Downloaded+1)
 		}()
 	}
 }
@@ -823,7 +830,7 @@ func jsonResponse(w http.ResponseWriter, status int, obj jsonObj) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	if err := json.NewEncoder(w).Encode(obj); err != nil {
-		log.Printf("json encode: %v", err)
+		logger.Error("json encode: %v", err)
 	}
 }
 
@@ -860,7 +867,7 @@ func (a *App) handleCheckUpload(w http.ResponseWriter, r *http.Request) {
 	if a.cfg.UserQuotaMB > 0 {
 		usedBytes, err := a.db.GetUserTotalBytes(username)
 		if err != nil {
-			log.Printf("check-upload quota: %v", err)
+			logger.Error("check-upload quota: %v", err)
 			jsonResponse(w, http.StatusInternalServerError, jsonObj{"ok": false, "reason": "server_error"})
 			return
 		}
@@ -918,7 +925,7 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 	// Limit concurrent upload sessions per user
 	count, err := a.db.CountActiveUploadSessionsByUser(username)
 	if err != nil {
-		log.Printf("upload init count sessions: %v", err)
+		logger.Error("upload init count sessions: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 		return
 	}
@@ -930,7 +937,7 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 	if a.cfg.UserQuotaMB > 0 {
 		usedBytes, err := a.db.GetUserTotalBytes(username)
 		if err != nil {
-			log.Printf("upload init quota: %v", err)
+			logger.Error("upload init quota: %v", err)
 			jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 			return
 		}
@@ -944,7 +951,7 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 	if req.Password != "" {
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			log.Printf("bcrypt init: %v", err)
+			logger.Error("bcrypt init: %v", err)
 			jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 			return
 		}
@@ -955,14 +962,14 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 	expiresAt := time.Now().UTC().Add(time.Duration(a.cfg.UploadSessionTTLHours) * time.Hour)
 
 	if err := os.MkdirAll(storage.ChunkDir(a.cfg.UploadDir, sessionToken), 0750); err != nil {
-		log.Printf("upload init mkdir: %v", err)
+		logger.Error("upload init mkdir: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 		return
 	}
 
 	_, err = a.db.CreateUploadSession(sessionToken, username, req.Filename, req.Size, req.TotalChunks, req.ChunkSize, expiresAt, req.Days, passwordHash, req.MaxDownloads)
 	if err != nil {
-		log.Printf("upload init db: %v", err)
+		logger.Error("upload init db: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 		return
 	}
@@ -1047,7 +1054,7 @@ func (a *App) handleUploadChunk(w http.ResponseWriter, r *http.Request, sessionT
 
 	bytesWritten, err := storage.SaveChunk(a.cfg.UploadDir, sessionToken, chunkIndex, limited)
 	if err != nil {
-		log.Printf("save chunk %s[%d]: %v", sessionToken, chunkIndex, err)
+		logger.Error("save chunk %s[%d]: %v", sessionToken, chunkIndex, err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "write_error"})
 		return
 	}
@@ -1058,7 +1065,7 @@ func (a *App) handleUploadChunk(w http.ResponseWriter, r *http.Request, sessionT
 	}
 
 	if err := a.db.MarkChunkReceived(sessionToken, chunkIndex); err != nil {
-		log.Printf("mark chunk %s[%d]: %v", sessionToken, chunkIndex, err)
+		logger.Error("mark chunk %s[%d]: %v", sessionToken, chunkIndex, err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "db_error"})
 		return
 	}
@@ -1111,21 +1118,21 @@ func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessi
 	}
 
 	if err := os.MkdirAll(a.cfg.UploadDir, 0750); err != nil {
-		log.Printf("complete mkdir: %v", err)
+		logger.Error("complete mkdir: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 		return
 	}
 
 	destDir := filepath.Join(a.cfg.UploadDir, uuid.New().String())
 	if err := os.MkdirAll(destDir, 0750); err != nil {
-		log.Printf("complete mkdir dest: %v", err)
+		logger.Error("complete mkdir dest: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 		return
 	}
 	destPath := filepath.Join(destDir, sess.OriginalName)
 
 	if err := storage.ComposeChunks(a.cfg.UploadDir, sessionToken, sess.TotalChunks, destPath); err != nil {
-		log.Printf("compose chunks %s: %v", sessionToken, err)
+		logger.Error("compose chunks %s: %v", sessionToken, err)
 		os.RemoveAll(destDir)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "compose_error"})
 		return
@@ -1136,31 +1143,33 @@ func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessi
 
 	share, err := a.db.CreateShare(shareToken, destPath, sess.OriginalName, sess.TotalSize, username, expiresAt, "", sess.PasswordHash, sess.MaxDownloads)
 	if err != nil {
-		log.Printf("complete create share %s: %v", sessionToken, err)
+		logger.Error("complete create share %s: %v", sessionToken, err)
 		os.RemoveAll(destDir)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "db_error"})
 		return
 	}
 
+	logger.Info("User %s completed chunked upload of %s (size: %s, token: %s)", username, sess.OriginalName, storage.HumanSize(sess.TotalSize), shareToken)
+
 	if a.cfg.EnableSHA256 {
 		go func(token, path string) {
 			hash, err := storage.ComputeSHA256(path)
 			if err != nil {
-				log.Printf("compute sha256 async chunked (%s): %v", token, err)
+				logger.Error("compute sha256 async chunked (%s): %v", token, err)
 				return
 			}
 			if err := a.db.SetShareSHA256(token, hash); err != nil {
-				log.Printf("store sha256 async chunked (%s): %v", token, err)
+				logger.Error("store sha256 async chunked (%s): %v", token, err)
 			}
 		}(shareToken, destPath)
 	}
 
 	// Cleanup chunks (best-effort)
 	if err := storage.CleanupChunkDir(a.cfg.UploadDir, sessionToken); err != nil {
-		log.Printf("cleanup chunks %s: %v", sessionToken, err)
+		logger.Warn("cleanup chunks %s: %v", sessionToken, err)
 	}
 	if err := a.db.DeleteUploadSession(sessionToken); err != nil {
-		log.Printf("delete upload session %s: %v", sessionToken, err)
+		logger.Warn("delete upload session %s: %v", sessionToken, err)
 	}
 
 	downloadURL := fmt.Sprintf("%s/d/%s", a.publicBaseURL(r), share.Token)
@@ -1169,7 +1178,9 @@ func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessi
 		go func() {
 			err := email.SendShareEmail(shareEmail, downloadURL, sess.OriginalName, sess.Days, sess.PasswordHash != "", username, a.cfg, userEmail, userPassword)
 			if err != nil {
-				log.Printf("failed to send chunked share email to %s: %v", shareEmail, err)
+				logger.Error("failed to send chunked share email to %s: %v", shareEmail, err)
+			} else {
+				logger.Debug("chunked share email successfully sent to %s", shareEmail)
 			}
 		}()
 	}
@@ -1203,10 +1214,10 @@ func (a *App) handleUploadAbort(w http.ResponseWriter, r *http.Request, sessionT
 	}
 
 	if err := storage.CleanupChunkDir(a.cfg.UploadDir, sessionToken); err != nil {
-		log.Printf("abort cleanup %s: %v", sessionToken, err)
+		logger.Warn("abort cleanup %s: %v", sessionToken, err)
 	}
 	if err := a.db.DeleteUploadSession(sessionToken); err != nil {
-		log.Printf("abort delete session %s: %v", sessionToken, err)
+		logger.Warn("abort delete session %s: %v", sessionToken, err)
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -1222,32 +1233,32 @@ func (a *App) startCleanupJob() {
 			// Clean up expired shares
 			expired, err := a.db.GetExpiredShares()
 			if err != nil {
-				log.Printf("cleanup: get expired: %v", err)
+				logger.Error("cleanup: get expired: %v", err)
 			} else {
 				for _, s := range expired {
 					if err := storage.DeleteFile(s.FilePath); err != nil {
-						log.Printf("cleanup: delete file %s: %v", s.FilePath, err)
+						logger.Error("cleanup: delete file %s: %v", s.FilePath, err)
 					}
 					if err := a.db.DeleteShare(s.Token); err != nil {
-						log.Printf("cleanup: delete share %s: %v", s.Token, err)
+						logger.Error("cleanup: delete share %s: %v", s.Token, err)
 					} else {
-						log.Printf("cleanup: removed expired share %s (%s)", s.Token, s.OriginalName)
+						logger.Info("cleanup: removed expired share %s (%s)", s.Token, s.OriginalName)
 					}
 				}
 			}
 			// Clean up stale upload sessions
 			stale, err := a.db.GetStaleUploadSessions()
 			if err != nil {
-				log.Printf("cleanup: get stale sessions: %v", err)
+				logger.Error("cleanup: get stale sessions: %v", err)
 			} else {
 				for _, s := range stale {
 					if err := storage.CleanupChunkDir(a.cfg.UploadDir, s.SessionToken); err != nil {
-						log.Printf("cleanup: remove chunks for session %s: %v", s.SessionToken, err)
+						logger.Error("cleanup: remove chunks for session %s: %v", s.SessionToken, err)
 					}
 					if err := a.db.DeleteUploadSession(s.SessionToken); err != nil {
-						log.Printf("cleanup: delete stale session %s: %v", s.SessionToken, err)
+						logger.Error("cleanup: delete stale session %s: %v", s.SessionToken, err)
 					} else {
-						log.Printf("cleanup: removed stale upload session %s (%s)", s.SessionToken, s.OriginalName)
+						logger.Info("cleanup: removed stale upload session %s (%s)", s.SessionToken, s.OriginalName)
 					}
 				}
 			}
@@ -1259,19 +1270,23 @@ func (a *App) startCleanupJob() {
 
 func main() {
 	cfg := config.Load()
+	logger.Init(cfg.LogLevel)
 
 	// Ensure data directories exist
 	if err := os.MkdirAll(cfg.UploadDir, 0750); err != nil {
-		log.Fatalf("create upload dir: %v", err)
+		logger.Error("create upload dir: %v", err)
+		os.Exit(1)
 	}
 	dbDir := filepath.Dir(cfg.DBPath)
 	if err := os.MkdirAll(dbDir, 0750); err != nil {
-		log.Fatalf("create db dir: %v", err)
+		logger.Error("create db dir: %v", err)
+		os.Exit(1)
 	}
 
 	db, err := database.InitDB(cfg.DBPath)
 	if err != nil {
-		log.Fatalf("init db: %v", err)
+		logger.Error("init db: %v", err)
+		os.Exit(1)
 	}
 
 	// ── Cookie store con crittografia dual-key ──────────────────────────────────
@@ -1297,7 +1312,8 @@ func main() {
 		webDir = "/app/web"
 	}
 	if err := app.loadTemplates(filepath.Join(webDir, "templates")); err != nil {
-		log.Fatalf("load templates: %v", err)
+		logger.Error("load templates: %v", err)
+		os.Exit(1)
 	}
 
 	app.startCleanupJob()

@@ -3,12 +3,12 @@ package auth
 import (
 	"crypto/tls"
 	"fmt"
-	"log"
 	"strings"
 	"time"
 
 	"github.com/go-ldap/ldap/v3"
 	"github.com/youorg/gopulley/internal/config"
+	"github.com/youorg/gopulley/internal/logger"
 )
 
 // Authenticate verifies username/password against the configured LDAP/AD server
@@ -40,7 +40,7 @@ func Authenticate(username, password string, cfg *config.Config) (bool, bool, er
 	}
 
 	// ── CONNECT ─────────────────────────────────────────────────────────────
-	log.Printf("ldap: dialing %s", cfg.LDAPHost)
+	logger.Debug("ldap: dialing %s", cfg.LDAPHost)
 	l, err := ldap.DialURL(cfg.LDAPHost, ldap.DialWithTLSConfig(tlsCfg))
 	if err != nil {
 		return false, false, fmt.Errorf("ldap dial: %w", err)
@@ -51,9 +51,9 @@ func Authenticate(username, password string, cfg *config.Config) (bool, bool, er
 
 	// ── StartTLS (per ldap:// su porta 389) ─────────────────────────────────
 	if cfg.LDAPStartTLS && strings.HasPrefix(cfg.LDAPHost, "ldap://") {
-		log.Printf("ldap: attempting StartTLS...")
+		logger.Debug("ldap: attempting StartTLS...")
 		if err := l.StartTLS(tlsCfg); err != nil {
-			log.Printf("ldap: StartTLS failed/ignored: %v. Reconnecting in plain text...", err)
+			logger.Warn("ldap: StartTLS failed/ignored: %v. Reconnecting in plain text...", err)
 			l.Close()
 			// Riconnettiti in chiaro poichè il socket precedente è rimasto "sporco"
 			l, err = ldap.DialURL(cfg.LDAPHost)
@@ -62,13 +62,13 @@ func Authenticate(username, password string, cfg *config.Config) (bool, bool, er
 			}
 			l.SetTimeout(5 * time.Second)
 		} else {
-			log.Printf("ldap: StartTLS successful")
+			logger.Debug("ldap: StartTLS successful")
 		}
 	}
 
 	// ── USER BIND (verifica credenziali) ────────────────────────────────────
 	userDN := fmt.Sprintf(cfg.LDAPUserDNTemplate, username)
-	log.Printf("ldap: attempting bind for %s", userDN)
+	logger.Debug("ldap: attempting bind for %s", userDN)
 	if err := l.Bind(userDN, password); err != nil {
 		if ldap.IsErrorWithCode(err, ldap.LDAPResultInvalidCredentials) {
 			return false, false, nil // credenziali errate → login fallito
@@ -157,7 +157,7 @@ func Authenticate(username, password string, cfg *config.Config) (bool, bool, er
 
 	// 2. Controllo query nested (LDAP_MATCHING_RULE_IN_CHAIN) se non risolto con memberOf e siamo su AD (non mock)
 	if (!hasRequiredGroup && requiredGroup != "") || (!isAdmin && adminGroup != "") {
-		log.Printf("ldap: %s: checking nested group membership for required/admin groups (IN_CHAIN mode)", username)
+		logger.Debug("ldap: %s: checking nested group membership for required/admin groups (IN_CHAIN mode)", username)
 	}
 
 	// Helper per interrogazione IN_CHAIN
@@ -196,7 +196,7 @@ func Authenticate(username, password string, cfg *config.Config) (bool, bool, er
 
 		nestedRes, errNested := l.Search(nestedReq)
 		if errNested != nil {
-			log.Printf("ldap: error checking nested membership for %q in %q: %v", userDN, groupName, errNested)
+			logger.Error("ldap: error checking nested membership for %q in %q: %v", userDN, groupName, errNested)
 			return false
 		}
 		return len(nestedRes.Entries) > 0
