@@ -462,6 +462,16 @@ func (db *DB) DeleteUploadSession(sessionToken string) error {
 	return err
 }
 
+// RefreshUploadSession extends the expiration time of an active upload session by the given TTL duration.
+func (db *DB) RefreshUploadSession(sessionToken string, ttlSeconds int) error {
+	newExpiresAt := time.Now().UTC().Add(time.Duration(ttlSeconds) * time.Second)
+	_, err := db.conn.Exec(
+		`UPDATE uploads_in_progress SET expires_at = ? WHERE session_token = ? AND expires_at > ?`,
+		newExpiresAt, sessionToken, time.Now().UTC(),
+	)
+	return err
+}
+
 // ── Done-chunks encoding helpers ─────────────────────────────────────────────
 
 func parseDoneChunks(s string) map[int]struct{} {

@@ -339,11 +339,13 @@
 
         // ── Chunked upload orchestrator ───────────────────────────
         const CHUNK_SIZE = {{.UploadChunkSizeMB}} * 1024 * 1024; // Dynamic chunk size from server
+        const UPLOAD_SESSION_REFRESH_SECONDS = {{.UploadSessionRefreshSeconds}}; // Keep-alive interval
         const MAX_RETRIES = 3;
         const RETRY_BASE_MS = 1000;
 
         let _uploadAbortController = null;
         let _currentSession = null;
+        let _keepAliveInterval = null;
 
         function hasSelectedFile() {
             const input = document.getElementById('file-input');
@@ -414,6 +416,30 @@
             hideProgressBar();
             _currentSession = null;
             _uploadAbortController = null;
+            stopKeepAliveTimer();
+        }
+
+        // Keep-alive timer: extends session TTL while browser is active
+        function startKeepAliveTimer() {
+            if (_keepAliveInterval) clearInterval(_keepAliveInterval);
+            if (!_currentSession) return;
+            
+            _keepAliveInterval = setInterval(() => {
+                // Only refresh if document is visible (user is actively using browser)
+                if (document.visibilityState !== 'visible') return;
+                if (!_currentSession) return;
+                
+                // Send keep-alive request (best-effort, don't block on response)
+                fetch('/api/upload/' + _currentSession + '/keep-alive', { method: 'POST' })
+                    .catch(() => { /* ignore network errors */ });
+            }, UPLOAD_SESSION_REFRESH_SECONDS * 1000);
+        }
+
+        function stopKeepAliveTimer() {
+            if (_keepAliveInterval) {
+                clearInterval(_keepAliveInterval);
+                _keepAliveInterval = null;
+            }
         }
 
         async function cancelUpload() {
@@ -503,6 +529,7 @@
                 }
                 session = initData.session;
                 _currentSession = session;
+                startKeepAliveTimer(); // Start background keep-alive while browser is active
             } catch (e) {
                 showUploadError(I18N.errNetworkInit);
                 setUploadUIBusy(false);

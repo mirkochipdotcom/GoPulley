@@ -49,9 +49,12 @@ type Config struct {
 	UserQuotaMB int64
 	// UploadChunkSizeMB: default chunk size for chunked uploads (default 10 MB).
 	UploadChunkSizeMB int64
-	// UploadSessionTTLHours: how long an in-progress upload session is kept before
-	// being cleaned up by the background job. Reduced to 2h to free slots quicker.
-	UploadSessionTTLHours int
+	// UploadSessionTTLSeconds: how long an in-progress upload session is kept before
+	// being cleaned up by the background job. Default 60 seconds (1 minute); extended by browser keep-alive.
+	UploadSessionTTLSeconds int
+	// UploadSessionRefreshSeconds: interval (seconds) for browser to refresh upload session TTL.
+	// Allows long uploads when browser is active; expires after this period of inactivity.
+	UploadSessionRefreshSeconds int
 	// MaxUploadSessionsPerUser: concurrent in-progress upload sessions allowed per user.
 	// Increased from 3 to 10 to allow drag-and-drop of multiple files without 429 errors.
 	MaxUploadSessionsPerUser int
@@ -72,6 +75,8 @@ type Config struct {
 
 	// LogLevel controls the application logging verbosity (debug, info, warn, error)
 	LogLevel string
+	// LoginSessionTTLHours: how long a login session (cookie) is valid. Default 24 hours.
+	LoginSessionTTLHours int
 }
 
 // Load reads environment variables and returns a populated Config.
@@ -100,7 +105,8 @@ func Load() *Config {
 		AdminUsers:               getEnv("ADMIN_USERS", ""),
 		UserQuotaMB:              int64(getEnvInt("USER_QUOTA_MB", 0)),
 		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 1)),
-		UploadSessionTTLHours:    getEnvInt("UPLOAD_SESSION_TTL_HOURS", 2),
+		UploadSessionTTLSeconds: getEnvInt("UPLOAD_SESSION_TTL_SECONDS", 60),
+		UploadSessionRefreshSeconds: getEnvInt("UPLOAD_SESSION_REFRESH_SECONDS", 30),
 		MaxUploadSessionsPerUser: getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 10),
 		SecureCookies:            getEnvBool("SECURE_COOKIES", true),
 
@@ -113,6 +119,7 @@ func Load() *Config {
 		SMTPUserAuth: getEnvBool("SMTP_USER_AUTH", false),
 
 		LogLevel: strings.ToLower(getEnv("LOG_LEVEL", "info")),
+		LoginSessionTTLHours: getEnvInt("LOGIN_SESSION_TTL_HOURS", 24),
 	}
 }
 

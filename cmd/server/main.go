@@ -290,7 +290,7 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	sess.Options = &sessions.Options{
 		Path:     "/",
-		MaxAge:   86400 * 7, // 7 days
+		MaxAge:   86400 * a.cfg.LoginSessionTTLHours, // configurable, default 24 hours
 		HttpOnly: true,
 		SameSite: http.SameSiteLaxMode,
 		Secure:   shouldUseSecureCookie(r, a.cfg), // Auto-detect da X-Forwarded-Proto o config
@@ -319,21 +319,22 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 // GET /dashboard
 type dashData struct {
-	Username          string
-	IsAdmin           bool
-	Shares            []*database.Share
-	EmailEnabled      bool
-	EnableSHA         bool
-	MaxDays           int
-	MaxUploadSize     string
-	BaseURL           string
-	Version           string
-	BrandName         string
-	BrandLogo         string
-	QuotaMB           int64
-	UsedMB            int64
-	QuotaPercent      int
-	UploadChunkSizeMB int64
+	Username                    string
+	IsAdmin                     bool
+	Shares                      []*database.Share
+	EmailEnabled                bool
+	EnableSHA                   bool
+	MaxDays                     int
+	MaxUploadSize               string
+	BaseURL                     string
+	Version                     string
+	BrandName                   string
+	BrandLogo                   string
+	QuotaMB                     int64
+	UsedMB                      int64
+	QuotaPercent                int
+	UploadChunkSizeMB           int64
+	UploadSessionRefreshSeconds int
 }
 
 func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -365,21 +366,22 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	baseURL := a.publicBaseURL(r)
 
 	a.render(w, r, "dashboard", dashData{
-		Username:          username,
-		IsAdmin:           isAdmin,
-		Shares:            shares,
-		EmailEnabled:      strings.TrimSpace(a.cfg.SMTPServer) != "",
-		EnableSHA:         a.cfg.EnableSHA256,
-		MaxDays:           a.cfg.MaxGlobalDays,
-		MaxUploadSize:     storage.HumanSize(a.cfg.MaxUploadSizeMB * 1024 * 1024),
-		BaseURL:           baseURL,
-		Version:           AppVersion,
-		BrandName:         a.cfg.BrandName,
-		BrandLogo:         a.cfg.BrandLogoPath,
-		QuotaMB:           a.cfg.UserQuotaMB,
-		UsedMB:            usedMB,
-		QuotaPercent:      quotaPercent,
-		UploadChunkSizeMB: a.cfg.UploadChunkSizeMB,
+		Username:                    username,
+		IsAdmin:                     isAdmin,
+		Shares:                      shares,
+		EmailEnabled:                strings.TrimSpace(a.cfg.SMTPServer) != "",
+		EnableSHA:                   a.cfg.EnableSHA256,
+		MaxDays:                     a.cfg.MaxGlobalDays,
+		MaxUploadSize:               storage.HumanSize(a.cfg.MaxUploadSizeMB * 1024 * 1024),
+		BaseURL:                     baseURL,
+		Version:                     AppVersion,
+		BrandName:                   a.cfg.BrandName,
+		BrandLogo:                   a.cfg.BrandLogoPath,
+		QuotaMB:                     a.cfg.UserQuotaMB,
+		UsedMB:                      usedMB,
+		QuotaPercent:                quotaPercent,
+		UploadChunkSizeMB:           a.cfg.UploadChunkSizeMB,
+		UploadSessionRefreshSeconds: a.cfg.UploadSessionRefreshSeconds,
 	})
 }
 
@@ -996,7 +998,7 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionToken := uuid.New().String()
-	expiresAt := time.Now().UTC().Add(time.Duration(a.cfg.UploadSessionTTLHours) * time.Hour)
+	expiresAt := time.Now().UTC().Add(time.Duration(a.cfg.UploadSessionTTLSeconds) * time.Second)
 
 	if err := os.MkdirAll(storage.ChunkDir(a.cfg.UploadDir, sessionToken), 0750); err != nil {
 		logger.Error("upload init mkdir: %v", err)
@@ -1057,6 +1059,38 @@ func (a *App) handleUploadReset(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("upload reset sessions user=%s reset=%d", username, reset)
 	jsonResponse(w, http.StatusOK, jsonObj{"ok": true, "reset": reset})
+}
+
+// POST /api/upload/{session}/keep-alive
+// Extends the TTL of an active upload session to keep it alive while the browser is active.
+func (a *App) handleUploadKeepAlive(w http.ResponseWriter, r *http.Request, sessionToken string) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	username := a.getUsername(r)
+
+	sess, err := a.db.GetUploadSession(sessionToken)
+	if err != nil {
+		jsonResponse(w, http.StatusNotFound, jsonObj{"error": "not_found"})
+		return
+	}
+
+	// Only the uploader can refresh their own session
+	if sess.Uploader != username {
+		jsonResponse(w, http.StatusForbidden, jsonObj{"error": "forbidden"})
+		return
+	}
+
+	// Refresh the session TTL
+	if err := a.db.RefreshUploadSession(sessionToken, a.cfg.UploadSessionTTLSeconds); err != nil {
+		logger.Warn("keep-alive refresh session %s: %v", sessionToken, err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
+
+	logger.Debug("upload keep-alive session=%s user=%s", sessionToken, username)
+	jsonResponse(w, http.StatusOK, jsonObj{"ok": true})
 }
 
 // GET /api/upload/{session}/status
@@ -1573,6 +1607,8 @@ func main() {
 		switch {
 		case action == "status" && r.Method == http.MethodGet:
 			app.handleUploadStatus(w, r, session)
+		case action == "keep-alive" && r.Method == http.MethodPost:
+			app.handleUploadKeepAlive(w, r, session)
 		case action == "complete" && r.Method == http.MethodPost:
 			app.handleUploadComplete(w, r, session)
 		case action == "chunk" && len(parts) >= 3 && r.Method == http.MethodPost:
