@@ -195,18 +195,6 @@ func (a *App) requireAuth(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-func (a *App) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		sess, _ := a.store.Get(r, sessionName)
-		isAdmin, _ := sess.Values["is_admin"].(bool)
-		if !isAdmin {
-			http.Error(w, "forbidden: admin access required", http.StatusForbidden)
-			return
-		}
-		next(w, r)
-	}
-}
-
 // publicBaseURL restituisce la base URL pubblica (schema+host) da usare nei link
 // di download condivisi. Usa PUBLIC_BASE_URL se configurato, altrimenti lo inferisce
 // dalla request (utile solo quando le due porte coincidono o in sviluppo locale).
@@ -385,10 +373,12 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin
 type adminDashData struct {
+	IsAdmin                bool
 	Username               string
 	Version                string
 	BrandName              string
 	BrandLogo              string
+	RedirectSeconds        int
 	Files                  []*database.Share
 	LargestFiles           []*database.Share
 	LongestExpirationFiles []*database.Share
@@ -400,6 +390,20 @@ type adminDashData struct {
 
 func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
+	sess, _ := a.store.Get(r, sessionName)
+	isAdmin, _ := sess.Values["is_admin"].(bool)
+
+	if !isAdmin {
+		a.render(w, r, "admin", adminDashData{
+			IsAdmin:         false,
+			Username:        username,
+			Version:         AppVersion,
+			BrandName:       a.cfg.BrandName,
+			BrandLogo:       a.cfg.BrandLogoPath,
+			RedirectSeconds: 8,
+		})
+		return
+	}
 
 	// Recupera tutti i file usando ListAllShares (che va prima aggiunta in sqlite.go)
 	// Nota: qui chiameremo un nuovo metodo db.ListAllShares
@@ -437,10 +441,12 @@ func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.render(w, r, "admin", adminDashData{
+		IsAdmin:                true,
 		Username:               username,
 		Version:                AppVersion,
 		BrandName:              a.cfg.BrandName,
 		BrandLogo:              a.cfg.BrandLogoPath,
+		RedirectSeconds:        8,
 		Files:                  files,
 		LargestFiles:           largestFiles,
 		LongestExpirationFiles: longestExpirationFiles,
@@ -1364,7 +1370,7 @@ func main() {
 	})
 	mux.HandleFunc("/logout", app.handleLogout)
 	mux.HandleFunc("/dashboard", app.requireAuth(app.handleDashboard))
-	mux.HandleFunc("/admin", app.requireAuth(app.requireAdmin(app.handleAdminDashboard)))
+	mux.HandleFunc("/admin", app.requireAuth(app.handleAdminDashboard))
 	mux.HandleFunc("/upload", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "method not allowed", 405)
