@@ -56,11 +56,6 @@ func InitDB(dbPath string) (*DB, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 
-	// Configure connection pool for SQLite.
-	// WAL mode + single connection prevents deadlock in concurrent chunk uploads.
-	conn.SetMaxOpenConns(1)
-	conn.SetMaxIdleConns(1)
-
 	if err := migrate(conn); err != nil {
 		return nil, fmt.Errorf("migrate: %w", err)
 	}
@@ -379,23 +374,19 @@ func (db *DB) GetUploadSession(sessionToken string) (*UploadSession, error) {
 }
 
 // MarkChunkReceived appends the given chunk index to the chunks_done list (idempotent).
-// Uses single UPDATE statement to avoid database contention on concurrent chunk uploads.
 func (db *DB) MarkChunkReceived(sessionToken string, index int) error {
-	indexStr := strconv.Itoa(index)
-	// Single-pass UPDATE: no read before write, preventing SQLite deadlock on concurrent chunks.
-	// CASE statement:
-	//   - If chunks_done empty/NULL: set to index
-	//   - If index already in list: no change (idempotent)
-	//   - Otherwise: append with comma separator
-	_, err := db.conn.Exec(`
-		UPDATE uploads_in_progress
-		SET chunks_done = CASE 
-		    WHEN chunks_done IS NULL OR chunks_done = '' THEN ?
-		    WHEN (',' || chunks_done || ',') LIKE ('%,' || ? || ',%') THEN chunks_done
-		    ELSE chunks_done || ',' || ?
-		END
-		WHERE session_token = ?
-	`, indexStr, indexStr, indexStr, sessionToken)
+	s, err := db.GetUploadSession(sessionToken)
+	if err != nil {
+		return fmt.Errorf("get session for mark: %w", err)
+	}
+	// Parse existing indices
+	existing := parseDoneChunks(s.ChunksDone)
+	if _, ok := existing[index]; ok {
+		return nil // already recorded — idempotent
+	}
+	existing[index] = struct{}{}
+	newDone := encodeDoneChunks(existing)
+	_, err = db.conn.Exec(`UPDATE uploads_in_progress SET chunks_done = ? WHERE session_token = ?`, newDone, sessionToken)
 	return err
 }
 
