@@ -311,20 +311,20 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 // GET /dashboard
 type dashData struct {
-	Username              string
-	IsAdmin               bool
-	Shares                []*database.Share
-	EmailEnabled          bool
-	EnableSHA             bool
-	MaxDays               int
-	BaseURL               string
-	Version               string
-	BrandName             string
-	BrandLogo             string
-	QuotaMB               int64
-	UsedMB                int64
-	QuotaPercent          int
-	UploadChunkSizeMB     int64
+	Username          string
+	IsAdmin           bool
+	Shares            []*database.Share
+	EmailEnabled      bool
+	EnableSHA         bool
+	MaxDays           int
+	BaseURL           string
+	Version           string
+	BrandName         string
+	BrandLogo         string
+	QuotaMB           int64
+	UsedMB            int64
+	QuotaPercent      int
+	UploadChunkSizeMB int64
 }
 
 func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -1075,6 +1075,7 @@ func (a *App) handleUploadChunk(w http.ResponseWriter, r *http.Request, sessionT
 	}
 
 	limited := http.MaxBytesReader(w, r.Body, expectedSize+1)
+	defer limited.Close()
 
 	bytesWritten, err := storage.SaveChunk(a.cfg.UploadDir, sessionToken, chunkIndex, limited)
 	if err != nil {
