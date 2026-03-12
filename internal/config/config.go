@@ -99,7 +99,7 @@ func Load() *Config {
 		LDAPAdminGroup:           getEnv("LDAP_ADMIN_GROUP", ""),
 		AdminUsers:               getEnv("ADMIN_USERS", ""),
 		UserQuotaMB:              int64(getEnvInt("USER_QUOTA_MB", 0)),
-		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 10)),
+		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 1)),
 		UploadSessionTTLHours:    getEnvInt("UPLOAD_SESSION_TTL_HOURS", 2),
 		MaxUploadSessionsPerUser: getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 10),
 		SecureCookies:            getEnvBool("SECURE_COOKIES", true),

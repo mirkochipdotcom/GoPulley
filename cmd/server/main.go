@@ -6,10 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -317,6 +317,7 @@ type dashData struct {
 	EmailEnabled      bool
 	EnableSHA         bool
 	MaxDays           int
+	MaxUploadSize     string
 	BaseURL           string
 	Version           string
 	BrandName         string
@@ -362,6 +363,7 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		EmailEnabled:      strings.TrimSpace(a.cfg.SMTPServer) != "",
 		EnableSHA:         a.cfg.EnableSHA256,
 		MaxDays:           a.cfg.MaxGlobalDays,
+		MaxUploadSize:     storage.HumanSize(a.cfg.MaxUploadSizeMB * 1024 * 1024),
 		BaseURL:           baseURL,
 		Version:           AppVersion,
 		BrandName:         a.cfg.BrandName,
@@ -670,6 +672,8 @@ func (a *App) handleComputeShareSHA256(w http.ResponseWriter, r *http.Request, t
 // DELETE /share/{token}
 func (a *App) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 	username := a.getUsername(r)
+	sess, _ := a.store.Get(r, sessionName)
+	isAdmin, _ := sess.Values["is_admin"].(bool)
 	token := strings.TrimPrefix(r.URL.Path, "/share/")
 	if token == "" {
 		http.Error(w, "missing token", 400)
@@ -685,7 +689,7 @@ func (a *App) handleDeleteShare(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "database error", 500)
 		return
 	}
-	if share.Uploader != username {
+	if share.Uploader != username && !isAdmin {
 		http.Error(w, "forbidden", 403)
 		return
 	}
@@ -1291,11 +1295,99 @@ func (a *App) startCleanupJob() {
 	}()
 }
 
+type loggingResponseWriter struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (lrw *loggingResponseWriter) WriteHeader(code int) {
+	lrw.status = code
+	lrw.ResponseWriter.WriteHeader(code)
+}
+
+func (lrw *loggingResponseWriter) Write(b []byte) (int, error) {
+	if lrw.status == 0 {
+		lrw.status = http.StatusOK
+	}
+	n, err := lrw.ResponseWriter.Write(b)
+	lrw.bytes += n
+	return n, err
+}
+
+func (a *App) withRequestLogging(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		lrw := &loggingResponseWriter{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(lrw, r)
+
+		user := a.getUsername(r)
+		if user == "" {
+			user = "-"
+		}
+		logger.Debug(
+			"http op method=%s path=%s query=%q status=%d bytes=%d duration=%s remote=%s user=%s ua=%q",
+			r.Method,
+			r.URL.Path,
+			r.URL.RawQuery,
+			lrw.status,
+			lrw.bytes,
+			time.Since(start).Round(time.Millisecond),
+			r.RemoteAddr,
+			user,
+			r.UserAgent(),
+		)
+	})
+}
+
+func shouldMaskEnvValue(key string) bool {
+	k := strings.ToUpper(key)
+	sensitive := []string{"SECRET", "PASSWORD", "PASS", "TOKEN", "KEY", "COOKIE", "CREDENTIAL", "PWD", "AUTH"}
+	for _, marker := range sensitive {
+		if strings.Contains(k, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func maskedEnvValue(v string) string {
+	if v == "" {
+		return ""
+	}
+	if len(v) <= 4 {
+		return "****"
+	}
+	return v[:2] + "****" + v[len(v)-2:]
+}
+
+func logEnvironmentDebug() {
+	envs := os.Environ()
+	sort.Strings(envs)
+	logger.Debug("startup env dump begin count=%d", len(envs))
+	for _, kv := range envs {
+		parts := strings.SplitN(kv, "=", 2)
+		key := parts[0]
+		val := ""
+		if len(parts) == 2 {
+			val = parts[1]
+		}
+		if shouldMaskEnvValue(key) {
+			val = maskedEnvValue(val)
+		}
+		logger.Debug("env %s=%s", key, val)
+	}
+	logger.Debug("startup env dump end")
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
 	cfg := config.Load()
 	logger.Init(cfg.LogLevel)
+	if strings.EqualFold(cfg.LogLevel, "debug") {
+		logEnvironmentDebug()
+	}
 
 	// Ensure data directories exist
 	if err := os.MkdirAll(cfg.UploadDir, 0750); err != nil {
@@ -1444,13 +1536,20 @@ func main() {
 		}
 	}))
 	if cfg.LDAPHost == "mock" {
-		log.Printf("[WARN] RUNNING IN MOCK MODE - any credentials accepted")
+		logger.Warn("RUNNING IN MOCK MODE - any credentials accepted")
 	}
 
 	addr := ":" + cfg.Port
-	log.Printf("GoPulley started on http://0.0.0.0%s", addr)
+	logger.Info("GoPulley started on http://0.0.0.0%s", addr)
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
-		log.Fatalf("server: %v", err)
+	handler := http.Handler(mux)
+	if strings.EqualFold(cfg.LogLevel, "debug") {
+		handler = app.withRequestLogging(handler)
+		logger.Debug("debug mode enabled: full HTTP operation logging active")
+	}
+
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		logger.Error("server: %v", err)
+		os.Exit(1)
 	}
 }
