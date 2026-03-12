@@ -50,9 +50,10 @@ type Config struct {
 	// UploadChunkSizeMB: default chunk size for chunked uploads (default 10 MB).
 	UploadChunkSizeMB int64
 	// UploadSessionTTLHours: how long an in-progress upload session is kept before
-	// being cleaned up by the background job (default 24 hours).
+	// being cleaned up by the background job. Reduced to 2h to free slots quicker.
 	UploadSessionTTLHours int
 	// MaxUploadSessionsPerUser: concurrent in-progress upload sessions allowed per user.
+	// Increased from 3 to 10 to allow drag-and-drop of multiple files without 429 errors.
 	MaxUploadSessionsPerUser int
 
 	// SecureCookies: se true (default), imposta il flag Secure sui cookie di sessione,
@@ -98,9 +99,9 @@ func Load() *Config {
 		LDAPAdminGroup:           getEnv("LDAP_ADMIN_GROUP", ""),
 		AdminUsers:               getEnv("ADMIN_USERS", ""),
 		UserQuotaMB:              int64(getEnvInt("USER_QUOTA_MB", 0)),
-		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 10)),
-		UploadSessionTTLHours:    getEnvInt("UPLOAD_SESSION_TTL_HOURS", 24),
-		MaxUploadSessionsPerUser: getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 3),
+		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 5)),
+		UploadSessionTTLHours:    getEnvInt("UPLOAD_SESSION_TTL_HOURS", 2),
+		MaxUploadSessionsPerUser: getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 10),
 		SecureCookies:            getEnvBool("SECURE_COOKIES", true),
 
 		SMTPServer:   getEnv("SMTP_SERVER", ""),

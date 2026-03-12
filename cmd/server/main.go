@@ -311,19 +311,20 @@ func (a *App) handleLogout(w http.ResponseWriter, r *http.Request) {
 
 // GET /dashboard
 type dashData struct {
-	Username     string
-	IsAdmin      bool
-	Shares       []*database.Share
-	EmailEnabled bool
-	EnableSHA    bool
-	MaxDays      int
-	BaseURL      string
-	Version      string
-	BrandName    string
-	BrandLogo    string
-	QuotaMB      int64
-	UsedMB       int64
-	QuotaPercent int
+	Username              string
+	IsAdmin               bool
+	Shares                []*database.Share
+	EmailEnabled          bool
+	EnableSHA             bool
+	MaxDays               int
+	BaseURL               string
+	Version               string
+	BrandName             string
+	BrandLogo             string
+	QuotaMB               int64
+	UsedMB                int64
+	QuotaPercent          int
+	UploadChunkSizeMB     int64
 }
 
 func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
@@ -355,19 +356,20 @@ func (a *App) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	baseURL := a.publicBaseURL(r)
 
 	a.render(w, r, "dashboard", dashData{
-		Username:     username,
-		IsAdmin:      isAdmin,
-		Shares:       shares,
-		EmailEnabled: strings.TrimSpace(a.cfg.SMTPServer) != "",
-		EnableSHA:    a.cfg.EnableSHA256,
-		MaxDays:      a.cfg.MaxGlobalDays,
-		BaseURL:      baseURL,
-		Version:      AppVersion,
-		BrandName:    a.cfg.BrandName,
-		BrandLogo:    a.cfg.BrandLogoPath,
-		QuotaMB:      a.cfg.UserQuotaMB,
-		UsedMB:       usedMB,
-		QuotaPercent: quotaPercent,
+		Username:          username,
+		IsAdmin:           isAdmin,
+		Shares:            shares,
+		EmailEnabled:      strings.TrimSpace(a.cfg.SMTPServer) != "",
+		EnableSHA:         a.cfg.EnableSHA256,
+		MaxDays:           a.cfg.MaxGlobalDays,
+		BaseURL:           baseURL,
+		Version:           AppVersion,
+		BrandName:         a.cfg.BrandName,
+		BrandLogo:         a.cfg.BrandLogoPath,
+		QuotaMB:           a.cfg.UserQuotaMB,
+		UsedMB:            usedMB,
+		QuotaPercent:      quotaPercent,
+		UploadChunkSizeMB: a.cfg.UploadChunkSizeMB,
 	})
 }
 

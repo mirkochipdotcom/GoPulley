@@ -337,7 +337,7 @@
         }
 
         // ── Chunked upload orchestrator ───────────────────────────
-        const CHUNK_SIZE = 10 * 1024 * 1024; // 10 MB
+        const CHUNK_SIZE = {{.UploadChunkSizeMB}} * 1024 * 1024; // Dynamic chunk size from server
         const MAX_RETRIES = 3;
         const RETRY_BASE_MS = 1000;
 
