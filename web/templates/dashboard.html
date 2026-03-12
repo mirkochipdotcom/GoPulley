@@ -214,7 +214,8 @@
             uploadedSuccessfully: '{{t "dashboard.uploaded_successfully"}}',
             expiresInDays: '{{t "dashboard.expires_in_days"}}',
             copyLink: '{{t "dashboard.copy_link"}}',
-            activeCountFmt: '{{t "dashboard.active_count" 0}}'
+            activeCountFmt: '{{t "dashboard.active_count" 0}}',
+            processing: '{{t "dashboard.processing"}}'
         };
 
         // ── File selection ──────────────────────────────────────
@@ -556,15 +557,31 @@
             }
 
             // 5. Complete
+            let fakeProgressInterval = null;
             try {
                 const shareEmailInput = document.getElementById('share-email');
                 const shareEmail = shareEmailInput ? shareEmailInput.value : '';
+                
+                progressLabel.textContent = I18N.processing;
+                
+                let currentVirtualPct = 95;
+                fakeProgressInterval = setInterval(() => {
+                    if (currentVirtualPct < 99) {
+                        currentVirtualPct++;
+                        setProgress(currentVirtualPct);
+                        progressLabel.textContent = I18N.processing + ' ' + currentVirtualPct + '%';
+                    }
+                }, 1500);
+
                 const completeResp = await fetch('/api/upload/' + session + '/complete', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ share_email: shareEmail }),
                     signal
                 });
+                
+                clearInterval(fakeProgressInterval);
+                
                 const completeData = await completeResp.json();
                 if (!completeResp.ok) {
                     const errs = { missing_chunks: I18N.errMissingChunks };
@@ -579,6 +596,7 @@
                 resetUploadForm();
                 setTimeout(() => htmx.trigger('#shares-list', 'refresh'), 300);
             } catch (e) {
+                if (fakeProgressInterval) clearInterval(fakeProgressInterval);
                 if (e.name === 'AbortError') return;
                 showUploadError(I18N.errNetworkCompletion);
                 setUploadUIBusy(false);
