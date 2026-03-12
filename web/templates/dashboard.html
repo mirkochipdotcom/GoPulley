@@ -419,14 +419,13 @@
             stopKeepAliveTimer();
         }
 
-        // Keep-alive timer: extends session TTL while browser is active
+        // Keep-alive timer: extends session TTL continuously while upload is in progress
+        // Works even when browser is hidden/minimized; only stops when upload completes or is cancelled
         function startKeepAliveTimer() {
             if (_keepAliveInterval) clearInterval(_keepAliveInterval);
             if (!_currentSession) return;
             
             _keepAliveInterval = setInterval(() => {
-                // Only refresh if document is visible (user is actively using browser)
-                if (document.visibilityState !== 'visible') return;
                 if (!_currentSession) return;
                 
                 // Send keep-alive request (best-effort, don't block on response)
