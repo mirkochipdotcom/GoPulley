@@ -269,6 +269,14 @@ func (a *App) handleLogin(w http.ResponseWriter, r *http.Request) {
 
 	logger.Info("login successful for: %s (isAdmin: %t)", username, isAdmin)
 
+	// Mitigate stale in-progress upload sessions that can survive restarts/proxy interruptions.
+	// Best-effort: login must not fail if cleanup fails.
+	if reset, err := a.resetActiveUploadSessionsForUser(username); err != nil {
+		logger.Warn("login reset upload sessions user=%s error=%v", username, err)
+	} else if reset > 0 {
+		logger.Info("login reset upload sessions user=%s reset=%d", username, reset)
+	}
+
 	sess, _ := a.store.Get(r, sessionName)
 	sess.Values["username"] = username
 	sess.Values["is_admin"] = isAdmin
@@ -383,7 +391,7 @@ type adminDashData struct {
 	BrandName              string
 	BrandLogo              string
 	RedirectSeconds        int
-	Files                  []*database.Share
+	TotalFiles             int
 	LargestFiles           []*database.Share
 	LongestExpirationFiles []*database.Share
 	TotalSpace             int64
@@ -409,12 +417,10 @@ func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Recupera tutti i file usando ListAllShares (che va prima aggiunta in sqlite.go)
-	// Nota: qui chiameremo un nuovo metodo db.ListAllShares
-	files, err := a.db.ListAllShares()
+	totalFiles, err := a.db.CountShares()
 	if err != nil {
-		logger.Error("list all shares error: %v", err)
-		files = nil
+		logger.Error("count shares error: %v", err)
+		totalFiles = 0
 	}
 
 	largestFiles, err := a.db.ListTopSharesBySize(10)
@@ -451,7 +457,7 @@ func (a *App) handleAdminDashboard(w http.ResponseWriter, r *http.Request) {
 		BrandName:              a.cfg.BrandName,
 		BrandLogo:              a.cfg.BrandLogoPath,
 		RedirectSeconds:        8,
-		Files:                  files,
+		TotalFiles:             totalFiles,
 		LargestFiles:           largestFiles,
 		LongestExpirationFiles: longestExpirationFiles,
 		TotalSpace:             totalSpace,
@@ -950,16 +956,19 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Limit concurrent upload sessions per user
-	count, err := a.db.CountActiveUploadSessionsByUser(username)
-	if err != nil {
-		logger.Error("upload init count sessions: %v", err)
-		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
-		return
-	}
-	if count >= a.cfg.MaxUploadSessionsPerUser {
-		jsonResponse(w, http.StatusTooManyRequests, jsonObj{"error": "too_many_sessions"})
-		return
+	// Limit concurrent upload sessions per user (0 or negative disables the limit).
+	if a.cfg.MaxUploadSessionsPerUser > 0 {
+		count, err := a.db.CountActiveUploadSessionsByUser(username)
+		if err != nil {
+			logger.Error("upload init count sessions: %v", err)
+			jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+			return
+		}
+		if count >= a.cfg.MaxUploadSessionsPerUser {
+			logger.Warn("upload init denied: too many active sessions user=%s active=%d limit=%d", username, count, a.cfg.MaxUploadSessionsPerUser)
+			jsonResponse(w, http.StatusTooManyRequests, jsonObj{"error": "too_many_sessions"})
+			return
+		}
 	}
 
 	if a.cfg.UserQuotaMB > 0 {
@@ -995,7 +1004,7 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = a.db.CreateUploadSession(sessionToken, username, req.Filename, req.Size, req.TotalChunks, req.ChunkSize, expiresAt, req.Days, passwordHash, req.MaxDownloads)
+	_, err := a.db.CreateUploadSession(sessionToken, username, req.Filename, req.Size, req.TotalChunks, req.ChunkSize, expiresAt, req.Days, passwordHash, req.MaxDownloads)
 	if err != nil {
 		logger.Error("upload init db: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
@@ -1007,6 +1016,47 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 		"chunk_size":   req.ChunkSize,
 		"total_chunks": req.TotalChunks,
 	})
+}
+
+// POST /api/upload/reset
+// Resets active in-progress upload sessions for the authenticated user.
+func (a *App) resetActiveUploadSessionsForUser(username string) (int, error) {
+	sessions, err := a.db.ListActiveUploadSessionsByUser(username)
+	if err != nil {
+		return 0, err
+	}
+
+	reset := 0
+	for _, s := range sessions {
+		if err := storage.CleanupChunkDir(a.cfg.UploadDir, s.SessionToken); err != nil {
+			logger.Warn("upload reset cleanup chunks %s: %v", s.SessionToken, err)
+		}
+		if err := a.db.DeleteUploadSession(s.SessionToken); err != nil {
+			logger.Warn("upload reset delete session %s: %v", s.SessionToken, err)
+			continue
+		}
+		reset++
+	}
+
+	return reset, nil
+}
+
+func (a *App) handleUploadReset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	username := a.getUsername(r)
+
+	reset, err := a.resetActiveUploadSessionsForUser(username)
+	if err != nil {
+		logger.Error("upload reset list sessions: %v", err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
+
+	logger.Info("upload reset sessions user=%s reset=%d", username, reset)
+	jsonResponse(w, http.StatusOK, jsonObj{"ok": true, "reset": reset})
 }
 
 // GET /api/upload/{session}/status
@@ -1497,6 +1547,7 @@ func main() {
 	// Chunked upload API routes (all require authentication)
 	mux.HandleFunc("/api/check-upload", app.requireAuth(app.handleCheckUpload))
 	mux.HandleFunc("/api/upload/init", app.requireAuth(app.handleUploadInit))
+	mux.HandleFunc("/api/upload/reset", app.requireAuth(app.handleUploadReset))
 	mux.HandleFunc("/api/upload/", app.requireAuth(func(w http.ResponseWriter, r *http.Request) {
 		// Path: /api/upload/{session}/status
 		//       /api/upload/{session}/chunk/{index}

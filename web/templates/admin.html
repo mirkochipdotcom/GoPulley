@@ -76,11 +76,11 @@
                     </div>
                     {{end}}
 
-                    <span class="shares-count" style="margin-top: 0;">{{t "admin.total_files" (len .Files)}}</span>
+                    <span class="shares-count" style="margin-top: 0;">{{t "admin.total_files" .TotalFiles}}</span>
                 </div>
             </div>
 
-            {{if eq (len .Files) 0}}
+            {{if eq .TotalFiles 0}}
             <div
                 style="text-align: center; padding: 3rem; background: var(--c-surface); border-radius: var(--radius-lg); border: 1px dashed var(--c-border-2);">
                 <span class="admin-empty-icon" aria-hidden="true">
@@ -97,9 +97,6 @@
 
             <h3 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--c-text-1);">{{t "admin.top_longest_expiration"}}</h3>
             {{template "fileTable" .LongestExpirationFiles}}
-
-            <h3 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.1rem; color: var(--c-text-1);">{{t "admin.all_files"}}</h3>
-            {{template "fileTable" .Files}}
 
             <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--c-text-2); text-align: center;">{{t "admin.privacy_note"}}</p>
             {{end}}

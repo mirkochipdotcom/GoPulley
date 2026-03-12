@@ -207,6 +207,16 @@ func (db *DB) ListAllShares() ([]*Share, error) {
 	return shares, rows.Err()
 }
 
+// CountShares returns the total number of shares in the database.
+func (db *DB) CountShares() (int, error) {
+	var count int
+	err := db.conn.QueryRow(`SELECT COUNT(*) FROM shares`).Scan(&count)
+	if err != nil {
+		return 0, err
+	}
+	return count, nil
+}
+
 // ListTopSharesBySize returns the top N largest shares in the database.
 func (db *DB) ListTopSharesBySize(limit int) ([]*Share, error) {
 	rows, err := db.conn.Query(
@@ -398,6 +408,30 @@ func (db *DB) CountActiveUploadSessionsByUser(uploader string) (int, error) {
 		uploader, time.Now().UTC(),
 	).Scan(&count)
 	return count, err
+}
+
+// ListActiveUploadSessionsByUser returns active (non-expired) upload sessions for a user.
+func (db *DB) ListActiveUploadSessionsByUser(uploader string) ([]*UploadSession, error) {
+	rows, err := db.conn.Query(
+		`SELECT session_token, uploader, original_name, total_size, total_chunks, chunk_size, chunks_done, created_at, expires_at, days, password_hash, max_downloads
+		 FROM uploads_in_progress WHERE uploader = ? AND expires_at > ? ORDER BY created_at DESC`,
+		uploader, time.Now().UTC(),
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var sessions []*UploadSession
+	for rows.Next() {
+		s := &UploadSession{}
+		if err := rows.Scan(&s.SessionToken, &s.Uploader, &s.OriginalName, &s.TotalSize, &s.TotalChunks, &s.ChunkSize,
+			&s.ChunksDone, &s.CreatedAt, &s.ExpiresAt, &s.Days, &s.PasswordHash, &s.MaxDownloads); err != nil {
+			return nil, err
+		}
+		sessions = append(sessions, s)
+	}
+	return sessions, rows.Err()
 }
 
 // GetStaleUploadSessions returns upload sessions whose expires_at is in the past.
