@@ -804,6 +804,11 @@ func (a *App) handleDownloadPage(w http.ResponseWriter, r *http.Request) {
 					SameSite: http.SameSiteLaxMode,
 					Secure:   shouldUseSecureCookie(r, a.cfg), // Auto-detect da X-Forwarded-Proto o config
 				}
+				if err := sess.Save(r, w); err != nil {
+					logger.Error("save unlock session: %v", err)
+					http.Error(w, "server error", http.StatusInternalServerError)
+					return
+				}
 
 				http.Redirect(w, r, "/d/"+token, http.StatusSeeOther)
 				return
