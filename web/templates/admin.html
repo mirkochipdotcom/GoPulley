@@ -134,7 +134,7 @@
         </thead>
         <tbody>
             {{range .}}
-            <tr id="share-{{.Token}}">
+            <tr class="share-row-{{.Token}}">
                 <td class="admin-secret-cell">
                     <strong class="admin-secret-badge" title="{{t "admin.secret_id"}}: {{.Token}}">
                         <span class="admin-secret-lock" aria-hidden="true">
@@ -178,7 +178,7 @@
                 <td>
                     <div style="display: flex; gap: 0.5rem; align-items: center;">
                         <button class="btn btn-danger btn-xs" hx-delete="/share/{{.Token}}"
-                            hx-target="#share-{{.Token}}" hx-swap="delete"
+                            hx-target=".share-row-{{.Token}}" hx-swap="delete"
                             hx-confirm="{{t "admin.force_delete_confirm" .Uploader}}">
                             {{t "admin.delete"}}
                         </button>
