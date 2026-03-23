@@ -190,6 +190,15 @@
     </table>
 </div>
 {{end}}
+    {{if .IsAdmin}}
+    <script>
+        document.body.addEventListener('htmx:afterRequest', function (e) {
+            if (e.detail.successful && e.detail.requestConfig.verb === 'delete') {
+                window.location.reload();
+            }
+        });
+    </script>
+    {{end}}
     {{if not .IsAdmin}}
     <script>
         (function () {
