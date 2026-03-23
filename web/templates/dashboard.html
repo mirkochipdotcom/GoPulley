@@ -196,6 +196,7 @@
             linkCopied: '{{t "dashboard.link_copied"}}',
             shaCopied: '{{t "dashboard.sha_copied"}}',
             uploadCanceled: '{{t "dashboard.upload_canceled"}}',
+            errNoDirectories: '{{t "dashboard.err_no_directories"}}',
             errQuotaExceeded: '{{t "dashboard.err_quota_exceeded"}}',
             errFileTooLarge: '{{t "dashboard.err_file_too_large"}}',
             errBadRequest: '{{t "dashboard.err_bad_request"}}',
@@ -274,6 +275,18 @@
             if (_isUploadBusy) return;
             const zone = document.getElementById('dropzone');
             zone.classList.remove('dragover');
+
+            if (e.dataTransfer && e.dataTransfer.items && e.dataTransfer.items.length > 0) {
+                const item = e.dataTransfer.items[0];
+                if (item.webkitGetAsEntry) {
+                    const entry = item.webkitGetAsEntry();
+                    if (entry && entry.isDirectory) {
+                        showToast(I18N.errNoDirectories);
+                        return;
+                    }
+                }
+            }
+
             const files = e.dataTransfer.files;
             if (files.length === 0) return;
             const fileName = files[0].name;
