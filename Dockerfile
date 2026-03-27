@@ -15,7 +15,7 @@ COPY . .
 
 # Compile: static binary, strip debug info for minimal size
 # Inject version via ldflags (defaults to 'dev' if not provided)
-ARG VERSION=1.0.28
+ARG VERSION=1.0.29
 ARG VERSION_SUFFIX=""
 RUN CGO_ENABLED=1 GOOS=linux \
   go build \
@@ -34,6 +34,10 @@ RUN apk add --no-cache ca-certificates tzdata \
   && chown -R gopulley:gopulley /data
 
 WORKDIR /app
+
+# Container-friendly defaults for paths
+ENV DB_PATH=/data/gopulley.db
+ENV UPLOAD_DIR=/data/uploads
 
 # Copy compiled binary
 COPY --from=builder /build/gopulley .
