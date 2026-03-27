@@ -19,7 +19,35 @@ services:
         required: false
     environment:
       - APP_PORT=${APP_PORT:-8080}
-      - APP_VERSION=${APP_VERSION:-1.0.30}
+      - APP_VERSION=${APP_VERSION:-1.0.31}
+      - SESSION_SECRET
+      - PUBLIC_BASE_URL
+      - LDAP_HOST
+      - LDAP_BASE_DN
+      - LDAP_USER_DN_TEMPLATE
+      - LDAP_TLS_SKIP_VERIFY
+      - LDAP_STARTTLS
+      - LDAP_BIND_DN
+      - LDAP_BIND_PASSWORD
+      - LDAP_REQUIRED_GROUP
+      - LDAP_ADMIN_GROUP
+      - ADMIN_USERS
+      - DB_PATH
+      - UPLOAD_DIR
+      - BRAND_NAME
+      - BRAND_LOGO
+      - ENABLE_SHA256
+      - USER_QUOTA_MB
+      - UPLOAD_CHUNK_SIZE_MB
+      - SECURE_COOKIES
+      - SMTP_SERVER
+      - SMTP_PORT
+      - SMTP_SECURITY
+      - SMTP_USER
+      - SMTP_PASSWORD
+      - SMTP_FROM
+      - SMTP_USER_AUTH
+      - LOG_LEVEL
     volumes:
       # Se DATA_DIR è definito (es. ./data) fa bind mount, altrimenti usa il volume GoPulley
       - ${DATA_DIR:-gopulley_data}:/data:rw,Z
