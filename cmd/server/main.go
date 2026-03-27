@@ -594,6 +594,14 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}()
 	}
 
+	locale := a.requestLocale(r)
+	successMsg := i18n.T(locale, "dashboard.uploaded_successfully")
+	expiryMsg := i18n.T(locale, "dashboard.expires_in_days", days)
+	emailMsg := ""
+	if shareEmail != "" {
+		emailMsg = fmt.Sprintf("<br><small>%s</small>", i18n.T(locale, "dashboard.email_sent_to", template.HTMLEscapeString(shareEmail)))
+	}
+
 	// Return HTMX response: a success card
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprintf(w, `
@@ -601,13 +609,13 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
   <div class="result-inner">
     <span class="result-icon">✓</span>
     <div class="result-content">
-      <strong>%s</strong> uploaded successfully!<br>
-      <small>%s &middot; expires in %d days</small>
+      <strong>%s</strong> %s<br>
+      <small>%s %s</small>
     </div>
   </div>
   <div class="link-box">
     <input type="text" value="%s" readonly id="share-link" />
-    <button class="btn btn-copy" onclick="copyLink()">Copy link</button>
+    <button class="btn btn-copy" onclick="copyLink()">%s</button>
   </div>
 	%s
 </div>
@@ -615,21 +623,24 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 <script>
   setTimeout(() => { htmx.trigger('#shares-list', 'refresh'); }, 300);
   document.getElementById('upload-form').reset();
-  document.getElementById('drop-title').textContent = 'Drag your file here';
+  document.getElementById('drop-title').textContent = '%s';
   document.getElementById('dropzone').classList.remove('has-file');
   document.getElementById('upload-btn').disabled = true;
 </script>
 `,
 		template.HTMLEscapeString(originalName),
+		successMsg,
 		storage.HumanSize(sizeBytes),
-		days,
+		expiryMsg+emailMsg,
 		template.HTMLEscapeString(downloadURL),
+		i18n.T(locale, "dashboard.copy_link"),
 		func() string {
 			if !a.cfg.EnableSHA256 {
 				return ""
 			}
 			return `<p class="sha-pending-note">SHA-256 in progress: it will appear in the dashboard when ready.</p>`
 		}(),
+		i18n.T(locale, "dashboard.drag_here"),
 	)
 }
 
@@ -1310,6 +1321,7 @@ func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessi
 		"filename":     sess.OriginalName,
 		"size":         sess.TotalSize,
 		"days":         sess.Days,
+		"share_email":  shareEmail,
 	})
 }
 

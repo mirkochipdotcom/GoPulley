@@ -213,6 +213,7 @@
             errCompletion: '{{t "dashboard.err_completion"}}',
             errNetworkCompletion: '{{t "dashboard.err_network_completion"}}',
             uploadedSuccessfully: '{{t "dashboard.uploaded_successfully"}}',
+            emailSentTo: '{{t "dashboard.email_sent_to"}}',
             expiresInDays: '{{t "dashboard.expires_in_days"}}',
             copyLink: '{{t "dashboard.copy_link"}}',
             activeCountFmt: '{{t "dashboard.active_count" 0}}',
@@ -652,11 +653,18 @@
             const url = escapeHtml(data.download_url || '');
             const name = escapeHtml(data.filename || '');
             const days = data.days || 0;
+            const email = data.share_email ? escapeHtml(data.share_email) : '';
+            
+            let emailSnippet = '';
+            if (email) {
+                emailSnippet = '<br><small>' + I18N.emailSentTo.replace('%s', email) + '</small>';
+            }
+
             document.getElementById('upload-result').innerHTML =
                 '<div id="upload-result-card" class="upload-result success" role="alert">' +
                 '<div class="result-inner"><span class="result-icon">✓</span>' +
                 '<div class="result-content"><strong>' + name + '</strong> ' + I18N.uploadedSuccessfully + '<br>' +
-                '<small>' + I18N.expiresInDays.replace('%d', days) + '</small></div></div>' +
+                '<small>' + I18N.expiresInDays.replace('%d', days) + '</small>' + emailSnippet + '</div></div>' +
                 '<div class="link-box"><input type="text" value="' + url + '" readonly id="share-link" />' +
                 '<button class="btn btn-copy" onclick="copyLink()">' + I18N.copyLink + '</button></div></div>';
         }
