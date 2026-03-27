@@ -77,38 +77,40 @@ type Config struct {
 	LogLevel string
 	// LoginSessionTTLHours: how long a login session (cookie) is valid. Default 24 hours.
 	LoginSessionTTLHours int
+	// AppVersion: optional manual override for version string
+	AppVersion string
 }
 
 // Load reads environment variables and returns a populated Config.
 // Falls back to sensible defaults when variables are absent.
 func Load() *Config {
 	return &Config{
-		Port:                     getEnv("APP_PORT", "8080"),
-		PublicBaseURL:            getEnv("PUBLIC_BASE_URL", ""),
-		SessionSecret:            getEnv("SESSION_SECRET", "please-change-me"),
-		LDAPHost:                 getEnv("LDAP_HOST", "mock"),
-		LDAPBaseDN:               getEnv("LDAP_BASE_DN", "dc=example,dc=com"),
-		LDAPUserDNTemplate:       getEnv("LDAP_USER_DN_TEMPLATE", "uid=%s,ou=Users,dc=example,dc=com"),
-		LDAPTLSSkipVerify:        getEnvBool("LDAP_TLS_SKIP_VERIFY", false),
-		LDAPStartTLS:             getEnvBool("LDAP_STARTTLS", true),
-		LDAPBindDN:               getEnv("LDAP_BIND_DN", ""),
-		LDAPBindPassword:         getEnv("LDAP_BIND_PASSWORD", ""),
-		LDAPRequiredGroup:        getEnv("LDAP_REQUIRED_GROUP", ""),
-		MaxGlobalDays:            getEnvInt("MAX_GLOBAL_DAYS", 30),
-		MaxUploadSizeMB:          int64(getEnvInt("MAX_UPLOAD_SIZE_MB", 2048)),
-		DBPath:                   getEnv("DB_PATH", "./gopulley.db"),
-		UploadDir:                getEnv("UPLOAD_DIR", "./uploads"),
-		BrandName:                getEnv("BRAND_NAME", ""),
-		BrandLogoPath:            getEnv("BRAND_LOGO", ""),
-		EnableSHA256:             getEnvBool("ENABLE_SHA256", false),
-		LDAPAdminGroup:           getEnv("LDAP_ADMIN_GROUP", ""),
-		AdminUsers:               getEnv("ADMIN_USERS", ""),
-		UserQuotaMB:              int64(getEnvInt("USER_QUOTA_MB", 0)),
-		UploadChunkSizeMB:        int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 1)),
-		UploadSessionTTLSeconds: getEnvInt("UPLOAD_SESSION_TTL_SECONDS", 60),
+		Port:                        getEnv("APP_PORT", "8080"),
+		PublicBaseURL:               getEnv("PUBLIC_BASE_URL", ""),
+		SessionSecret:               getEnv("SESSION_SECRET", "please-change-me"),
+		LDAPHost:                    getEnv("LDAP_HOST", "mock"),
+		LDAPBaseDN:                  getEnv("LDAP_BASE_DN", "dc=example,dc=com"),
+		LDAPUserDNTemplate:          getEnv("LDAP_USER_DN_TEMPLATE", "uid=%s,ou=Users,dc=example,dc=com"),
+		LDAPTLSSkipVerify:           getEnvBool("LDAP_TLS_SKIP_VERIFY", false),
+		LDAPStartTLS:                getEnvBool("LDAP_STARTTLS", true),
+		LDAPBindDN:                  getEnv("LDAP_BIND_DN", ""),
+		LDAPBindPassword:            getEnv("LDAP_BIND_PASSWORD", ""),
+		LDAPRequiredGroup:           getEnv("LDAP_REQUIRED_GROUP", ""),
+		MaxGlobalDays:               getEnvInt("MAX_GLOBAL_DAYS", 30),
+		MaxUploadSizeMB:             int64(getEnvInt("MAX_UPLOAD_SIZE_MB", 2048)),
+		DBPath:                      getEnv("DB_PATH", "./gopulley.db"),
+		UploadDir:                   getEnv("UPLOAD_DIR", "./uploads"),
+		BrandName:                   getEnv("BRAND_NAME", ""),
+		BrandLogoPath:               getEnv("BRAND_LOGO", ""),
+		EnableSHA256:                getEnvBool("ENABLE_SHA256", false),
+		LDAPAdminGroup:              getEnv("LDAP_ADMIN_GROUP", ""),
+		AdminUsers:                  getEnv("ADMIN_USERS", ""),
+		UserQuotaMB:                 int64(getEnvInt("USER_QUOTA_MB", 0)),
+		UploadChunkSizeMB:           int64(getEnvInt("UPLOAD_CHUNK_SIZE_MB", 1)),
+		UploadSessionTTLSeconds:     getEnvInt("UPLOAD_SESSION_TTL_SECONDS", 60),
 		UploadSessionRefreshSeconds: getEnvInt("UPLOAD_SESSION_REFRESH_SECONDS", 30),
-		MaxUploadSessionsPerUser: getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 10),
-		SecureCookies:            getEnvBool("SECURE_COOKIES", true),
+		MaxUploadSessionsPerUser:    getEnvInt("MAX_UPLOAD_SESSIONS_PER_USER", 10),
+		SecureCookies:               getEnvBool("SECURE_COOKIES", true),
 
 		SMTPServer:   getEnv("SMTP_SERVER", ""),
 		SMTPPort:     getEnvInt("SMTP_PORT", 587),
@@ -118,8 +120,9 @@ func Load() *Config {
 		SMTPFrom:     getEnv("SMTP_FROM", ""),
 		SMTPUserAuth: getEnvBool("SMTP_USER_AUTH", false),
 
-		LogLevel: strings.ToLower(getEnv("LOG_LEVEL", "info")),
+		LogLevel:             strings.ToLower(getEnv("LOG_LEVEL", "info")),
 		LoginSessionTTLHours: getEnvInt("LOGIN_SESSION_TTL_HOURS", 24),
+		AppVersion:           getEnv("APP_VERSION", ""),
 	}
 }
 

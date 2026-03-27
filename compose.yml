@@ -15,7 +15,8 @@ services:
     ports:
       - "8080:8080" # porta unica (download + admin)
     env_file:
-      - .env
+      - path: .env
+        required: false
     volumes:
       # DATA_DIR definito in .env — default ./data accanto a compose.yml
       - ${DATA_DIR:-./data}:/data:rw,Z

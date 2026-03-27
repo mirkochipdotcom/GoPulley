@@ -15,6 +15,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/sessions"
+	"github.com/joho/godotenv"
 	"github.com/youorg/gopulley/internal/auth"
 	"github.com/youorg/gopulley/internal/config"
 	"github.com/youorg/gopulley/internal/database"
@@ -1472,7 +1473,13 @@ func logEnvironmentDebug() {
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
+	// Carica .env se presente (opzionale)
+	_ = godotenv.Load()
+
 	cfg := config.Load()
+	if cfg.AppVersion != "" {
+		AppVersion = cfg.AppVersion
+	}
 	logger.Init(cfg.LogLevel)
 	if strings.EqualFold(cfg.LogLevel, "debug") {
 		logEnvironmentDebug()
