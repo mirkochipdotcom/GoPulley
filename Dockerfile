@@ -15,7 +15,7 @@ COPY . .
 
 # Compile: static binary, strip debug info for minimal size
 # Inject version via ldflags (defaults to 'dev' if not provided)
-ARG VERSION=1.0.26
+ARG VERSION=1.0.27
 ARG VERSION_SUFFIX=""
 RUN CGO_ENABLED=1 GOOS=linux \
   go build \
