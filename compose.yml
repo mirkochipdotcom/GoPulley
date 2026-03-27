@@ -18,5 +18,8 @@ services:
       - path: .env
         required: false
     volumes:
-      # DATA_DIR definito in .env — default ./data accanto a compose.yml
-      - ${DATA_DIR:-./data}:/data:rw,Z
+      # Se DATA_DIR è definito (es. ./data) fa bind mount, altrimenti usa il volume GoPulley
+      - ${DATA_DIR:-gopulley_data}:/data:rw,Z
+
+volumes:
+  gopulley_data:
