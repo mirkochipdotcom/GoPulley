@@ -352,8 +352,8 @@
         }
 
         // ── Chunked upload orchestrator ───────────────────────────
-        const CHUNK_SIZE = {{.UploadChunkSizeMB}} * 1024 * 1024; // Dynamic chunk size from server
-        const UPLOAD_SESSION_REFRESH_SECONDS = {{.UploadSessionRefreshSeconds}}; // Keep-alive interval
+        const CHUNK_SIZE = Number('{{.UploadChunkSizeMB}}') * 1024 * 1024; // Dynamic chunk size from server
+        const UPLOAD_SESSION_REFRESH_SECONDS = Number('{{.UploadSessionRefreshSeconds}}'); // Keep-alive interval
         const MAX_RETRIES = 3;
         const RETRY_BASE_MS = 1000;
 

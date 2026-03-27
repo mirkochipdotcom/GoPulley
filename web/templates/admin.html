@@ -202,7 +202,7 @@
     {{if not .IsAdmin}}
     <script>
         (function () {
-            let remaining = {{.RedirectSeconds}};
+            let remaining = Number('{{.RedirectSeconds}}');
             const note = document.getElementById('redirect-note');
             const step = () => {
                 remaining -= 1;
