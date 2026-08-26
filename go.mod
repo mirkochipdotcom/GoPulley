@@ -1,6 +1,6 @@
 module github.com/youorg/gopulley
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/go-ldap/ldap/v3 v3.4.8
@@ -8,8 +8,8 @@ require (
 	github.com/gorilla/sessions v1.3.0
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.22
-	golang.org/x/crypto v0.45.0
-	golang.org/x/sys v0.41.0
+	golang.org/x/crypto v0.52.0
+	golang.org/x/sys v0.45.0
 )
 
 require (
