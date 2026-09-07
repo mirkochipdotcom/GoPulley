@@ -23,3 +23,4 @@ tmp-test.db
 # OS
 .DS_Store
 Thumbs.db
+.serena/
