@@ -8,15 +8,20 @@ on:
     branches:
       - main
 
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.25'
 
@@ -30,3 +35,17 @@ jobs:
         env:
           CGO_ENABLED: 1
         run: go test ./... -race -v
+
+      # Scan bloccante su dipendenze go.mod/go.sum — coglie CVE note prima
+      # ancora di arrivare al build immagine (che scansiona di nuovo,
+      # report-only, in release.yml).
+      - name: Trivy scan filesystem dependencies
+        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
+        with:
+          version: latest # il binario Trivy pinnato di default da questa release dell'action (0.69.1) non installa
+          scan-type: fs
+          scan-ref: .
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: ${{ github.workspace }}/.trivyignore

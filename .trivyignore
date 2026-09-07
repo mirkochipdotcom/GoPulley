@@ -1,0 +1,2 @@
+# Trivy ignore list — solo falsi positivi verificati, mai CVE reali ignorate alla cieca.
+# Rivalutare quando la causa sottostante cambia (nuova versione dipendenza/immagine base).
