@@ -26,7 +26,7 @@ RUN CGO_ENABLED=1 GOOS=linux \
 
 # ── Stage 2: Runtime ─────────────────────────────────────────────────────────
 # alpine gives us CA certs (needed for LDAPS) and a minimal libc
-FROM alpine:3.19
+FROM alpine:3.24
 
 RUN apk add --no-cache ca-certificates tzdata \
   && adduser -D -u 1001 gopulley \
