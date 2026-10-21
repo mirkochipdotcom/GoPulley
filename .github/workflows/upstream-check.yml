@@ -1,0 +1,97 @@
+name: Upstream check
+
+# Segnala gli aggiornamenti che dependabot non vede (file vendorizzati,
+# versioni negli input dei workflow). Apre una sola issue per componente
+# (label "upstream") e la aggiorna se esce una release ancora più recente.
+
+on:
+  schedule:
+    - cron: '0 5 * * 1' # lunedì 05:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    name: Upstream (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: htmx
+            repo: bigskysoftware/htmx
+            # Versione nel nome del file vendorizzato: web/static/js/htmx-X.Y.Z.min.js
+            current: >-
+              ls web/static/js/htmx-*.min.js | sed -E 's#.*/htmx-(.+)\.min\.js#\1#'
+          - name: trivy
+            repo: aquasecurity/trivy
+            # Binario Trivy usato da build.yml e test.yml
+            current: >-
+              sed -nE 's/^ *TRIVY_VERSION: *v?([0-9.]+).*/\1/p' .github/workflows/build.yml
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Confronta con l'ultima release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NAME: ${{ matrix.name }}
+          UPSTREAM: ${{ matrix.repo }}
+          CURRENT_CMD: ${{ matrix.current }}
+        run: |
+          # v3.3 == v3.3.0: rimuove il prefisso v e completa a tre componenti.
+          norm() { local v="${1#v}"; while [ "$(tr -cd . <<< "$v" | wc -c)" -lt 2 ]; do v="$v.0"; done; echo "$v"; }
+
+          current=$(bash -c "$CURRENT_CMD")
+          if [ -z "$current" ]; then
+            echo "::error::Versione corrente di $NAME non trovata"
+            exit 1
+          fi
+          latest_tag=$(gh api "repos/$UPSTREAM/releases/latest" --jq .tag_name)
+          cur=$(norm "$current")
+          lat=$(norm "$latest_tag")
+          echo "$NAME: in uso $cur, upstream $lat ($latest_tag)"
+
+          newest=$(printf '%s\n%s\n' "$cur" "$lat" | sort -V | tail -n1)
+          if [ "$cur" = "$lat" ] || [ "$newest" = "$cur" ]; then
+            echo "Aggiornato."
+            exit 0
+          fi
+
+          # Ultima release nella stessa major di quella in uso (aggiornamento meno rischioso).
+          major="${cur%%.*}"
+          same_major=$(gh api "repos/$UPSTREAM/releases?per_page=100" \
+            --jq '.[] | select(.prerelease | not) | .tag_name' \
+            | while read -r t; do n=$(norm "$t"); [ "${n%%.*}" = "$major" ] && echo "$n"; done \
+            | sort -V | tail -n1)
+
+          title="Upstream: $NAME $lat disponibile (in uso $cur)"
+          body=$(cat <<EOF
+          Nuova release upstream di **$NAME** non tracciabile da dependabot.
+
+          - In uso: \`$cur\`
+          - Ultima release: [\`$latest_tag\`](https://github.com/$UPSTREAM/releases/tag/$latest_tag)
+          - Ultima release della major $major: \`${same_major:-n/d}\`
+
+          Issue aperta da \`.github/workflows/upstream-check.yml\`: verrà aggiornata se esce una release più recente.
+          EOF
+          )
+
+          gh label create upstream --repo "$GITHUB_REPOSITORY" \
+            --color 5319E7 --description "Aggiornamento upstream non visibile a dependabot" 2>/dev/null || true
+
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --label upstream \
+            --search "\"Upstream: $NAME \" in:title" --json number,title \
+            --jq "[.[] | select(.title | startswith(\"Upstream: $NAME \"))][0] // empty")
+          if [ -z "$existing" ]; then
+            gh issue create --repo "$GITHUB_REPOSITORY" --label upstream --title "$title" --body "$body"
+          elif [ "$(jq -r .title <<< "$existing")" != "$title" ]; then
+            gh issue edit "$(jq -r .number <<< "$existing")" --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"
+          else
+            echo "Issue già aperta: #$(jq -r .number <<< "$existing")"
+          fi

@@ -1,23 +1,50 @@
 version: 2
+
+# Gruppi solo minor/patch: le major arrivano sempre come PR singole e restano
+# aperte con label "revisione-manuale" (vedi dependabot-automerge.yml).
+# Le dipendenze sensibili sono escluse dai gruppi, così non trascinano
+# l'intero gruppo in revisione manuale.
+# open-pull-requests-limit: le major lasciate aperte non devono bloccare nuove PR.
+# semver-major-days è valido solo su alcuni ecosistemi (qui gomod): su docker e
+# github-actions invalida il file.
+
 updates:
   - package-ecosystem: gomod
     directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 7
       semver-major-days: 14
+    groups:
+      go-minor-patch:
+        update-types: ["minor", "patch"]
+        exclude-patterns:
+          - "github.com/go-ldap/ldap/v3"
 
   - package-ecosystem: docker
     directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 7
+    groups:
+      docker-minor-patch:
+        update-types: ["minor", "patch"]
 
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    open-pull-requests-limit: 10
     cooldown:
       default-days: 7
+    groups:
+      # init/analyze/upload-sarif devono avere la stessa versione.
+      codeql:
+        patterns:
+          - "github/codeql-action*"
+      actions-minor-patch:
+        update-types: ["minor", "patch"]

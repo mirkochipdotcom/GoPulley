@@ -1,0 +1,67 @@
+name: Update behind PRs
+
+# Il ruleset di main richiede branch aggiornati ("strict"): una PR dependabot
+# con auto-merge attivo resta BEHIND dopo ogni merge su main e non si unisce
+# da sola. Questo workflow aggiorna UNA PR alla volta (la più vecchia), solo
+# quando nessun'altra PR con auto-merge ha check ancora in corso, così le PR
+# si uniscono in sequenza senza rilanciare la CI su tutte a ogni merge.
+#
+# Usa il token della GitHub App: un push fatto con GITHUB_TOKEN non avvierebbe
+# la CI sulla PR aggiornata.
+
+on:
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: update-behind
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Token GitHub App
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Aggiorna la PR più vecchia rimasta indietro
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh pr list --repo "$GITHUB_REPOSITORY" --state open --author app/dependabot --limit 100 \
+            --json number,createdAt,autoMergeRequest,mergeStateStatus,statusCheckRollup > prs.json
+
+          # PR con auto-merge e check ancora in corso. Le PR BLOCKED con gate
+          # fallito hanno check completati e non vengono contate (altrimenti
+          # bloccherebbero tutto per sempre).
+          busy=$(jq -r '[.[]
+            | select(.autoMergeRequest != null)
+            | select(any(.statusCheckRollup[]?; (.status // .state)
+                | IN("QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED", "EXPECTED")))
+            | .number] | join(" ")' prs.json)
+          if [ -n "$busy" ]; then
+            echo "Check in corso su PR: $busy. Riprovo al prossimo giro."
+            exit 0
+          fi
+
+          next=$(jq -r '[.[] | select(.autoMergeRequest != null and .mergeStateStatus == "BEHIND")]
+            | sort_by(.createdAt) | .[0].number // empty' prs.json)
+          if [ -z "$next" ]; then
+            echo "Nessuna PR con auto-merge rimasta indietro."
+            exit 0
+          fi
+
+          echo "Aggiorno PR #$next"
+          gh pr update-branch "$next" --repo "$GITHUB_REPOSITORY"
