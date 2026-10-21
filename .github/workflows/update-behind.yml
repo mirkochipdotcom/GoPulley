@@ -13,6 +13,11 @@ on:
   push:
     branches:
       - main
+  # Se al push su main un'altra PR aveva check in corso, il giro viene saltato:
+  # la fine di un CI gate rilancia il controllo senza aspettare il cron.
+  workflow_run:
+    workflows: ["CI gate"]
+    types: [completed]
   schedule:
     - cron: '17 * * * *'
   workflow_dispatch:

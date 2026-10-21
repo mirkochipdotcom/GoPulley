@@ -19,7 +19,7 @@ Immagine pubblicata su `ghcr.io/mirkochipdotcom/gopulley`.
 | `build.yml` | build `load` → smoke → Trivy immagine (bloccante, `CRITICAL,HIGH`) → push. Mai push su PR. Cron lunedì 04:00 UTC ripubblica `:latest` da main |
 | `ci-gate.yml` | job `CI gate`: required check del ruleset di main, insieme a `test` |
 | `dependabot-automerge.yml` | patch/minor → `gh pr merge --auto --squash` con token GitHub App; major / tipo vuoto / sensibili → label `revisione-manuale` |
-| `update-behind.yml` | aggiorna una PR dependabot BEHIND alla volta (ruleset strict) |
+| `update-behind.yml` | aggiorna una PR dependabot BEHIND alla volta (ruleset strict). Trigger: push su main, fine di ogni `CI gate`, cron orario |
 | `upstream-check.yml` | issue `upstream` per dipendenze invisibili a dependabot (htmx, binario Trivy) |
 
 Tag immagine: `:main` (push/cron/dispatch su main), `:sha-<short>` (rollback), `:vX.Y.Z` + semver sui tag `v*`,
