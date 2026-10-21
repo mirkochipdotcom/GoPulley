@@ -1482,6 +1482,20 @@ func logEnvironmentDebug() {
 	logger.Debug("startup env dump end")
 }
 
+// ── Cookie store con crittografia dual-key ──────────────────────────────────
+// Chiave 1: HMAC authentication (64 bytes)
+// Chiave 2: AES encryption (32 bytes)
+func newCookieStore(secret string) *sessions.CookieStore {
+	authKey := []byte(secret)
+	if len(authKey) < 32 {
+		// Pad to minimum 32 bytes if SESSION_SECRET is too short
+		authKey = append(authKey, make([]byte, 32-len(authKey))...)
+	}
+	// Derive encryption key from session secret
+	encKey := sha256.Sum256([]byte(secret + "-encryption"))
+	return sessions.NewCookieStore(authKey, encKey[:])
+}
+
 // ── Main ─────────────────────────────────────────────────────────────────────
 
 func main() {
@@ -1514,21 +1528,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	// ── Cookie store con crittografia dual-key ──────────────────────────────────
-	// Chiave 1: HMAC authentication (64 bytes)
-	// Chiave 2: AES encryption (32 bytes)
-	authKey := []byte(cfg.SessionSecret)
-	if len(authKey) < 32 {
-		// Pad to minimum 32 bytes if SESSION_SECRET is too short
-		authKey = append(authKey, make([]byte, 32-len(authKey))...)
-	}
-	// Derive encryption key from session secret
-	encKey := sha256.Sum256([]byte(cfg.SessionSecret + "-encryption"))
-
 	app := &App{
 		cfg:   cfg,
 		db:    db,
-		store: sessions.NewCookieStore(authKey, encKey[:]),
+		store: newCookieStore(cfg.SessionSecret),
 	}
 
 	// Detect web directory (supports both dev and container layout)
