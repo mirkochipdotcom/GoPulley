@@ -1,76 +1,174 @@
-name: Build & Push Container
+name: Build & Publish Image
+
+# Ordine: build (load) → smoke test → Trivy bloccante → push.
+# Il push avviene solo se tutto passa e mai su pull_request.
+# Il cron settimanale ricostruisce da main e ripubblica :latest per
+# includere le patch delle immagini base flottanti (alpine, golang).
 
 on:
   push:
+    branches:
+      - main
     tags:
-      - '*'
+      - 'v*'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - .trivyignore
+      - go.mod
+      - go.sum
+      - '**.go'
+      - 'web/**'
+      - .github/workflows/build.yml
+  schedule:
+    - cron: '0 4 * * 1' # lunedì 04:00 UTC
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag versione da pubblicare (es. 0.9.6)'
-        required: false
-        default: 'latest'
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: mirkochipdotcom/gopulley
+  # Versione del binario Trivy: tracciata da upstream-check.yml (dependabot non la vede).
+  TRIVY_VERSION: v0.75.0
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
-  build-push:
+  image:
+    name: Image (${{ matrix.name }})
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     permissions:
       contents: read
       packages: write
       security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: gopulley
+            image: mirkochipdotcom/gopulley
+            context: .
+            dockerfile: Dockerfile
+            trivy-severity: CRITICAL,HIGH
+            # Avvia il container con i default (LDAP mock) e verifica che
+            # la pagina di login e gli asset statici vengano serviti.
+            smoke: |
+              cid=$(docker run -d -e SESSION_SECRET=smoke-test-secret-0123456789abcdef "$IMAGE")
+              ok=0
+              for _ in $(seq 1 30); do
+                if docker exec "$cid" wget -qO /dev/null http://127.0.0.1:8080/login \
+                  && docker exec "$cid" sh -c 'wget -qO /dev/null http://127.0.0.1:8080/static/js/$(basename /app/web/static/js/htmx-*.min.js)'; then
+                  ok=1
+                  break
+                fi
+                sleep 1
+              done
+              docker logs "$cid"
+              docker rm -f "$cid" >/dev/null
+              test "$ok" = 1
 
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # serve git describe per la versione
+
+      # Footer: sui tag v* il nome del tag, altrimenti l'ultimo tag raggiungibile.
+      # Il commit esatto è nel tag immagine :sha-<short>.
+      - name: Versione applicazione
+        id: version
+        run: |
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            version="$GITHUB_REF_NAME"
+          else
+            version=$(git describe --tags --abbrev=0 2>/dev/null || echo dev)
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Versione: $version"
+
+      - name: Estrai metadata (tag + labels)
+        id: meta
+        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
+        with:
+          images: ${{ env.REGISTRY }}/${{ matrix.image }}
+          flavor: |
+            latest=false
+          tags: |
+            type=ref,event=pr
+            type=raw,value=main,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=sha-,format=short
+            type=ref,event=tag
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') || (github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}
+
+      - name: Build immagine (locale, senza push)
+        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
+          load: true
+          push: false
+          pull: true # base flottanti sempre aggiornate (rebuild settimanale)
+          build-args: |
+            VERSION=${{ steps.version.outputs.version }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+
+      - name: Smoke test
+        env:
+          IMAGE: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+        run: ${{ matrix.smoke }}
+
+      - name: Trivy image scan (bloccante)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
+          format: table
+          severity: ${{ matrix.trivy-severity }}
+          ignore-unfixed: true
+          exit-code: "1"
+          trivyignores: ${{ github.workspace }}/.trivyignore
 
       - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Estrai metadata (tag + labels)
-        id: meta
-        uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=ref,event=tag
-            type=raw,value=latest
+      # Pubblica esattamente l'immagine testata e scansionata (nessun rebuild).
+      - name: Push
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          while read -r tag; do
+            [ -n "$tag" ] && docker push "$tag"
+          done <<< "$TAGS"
 
-      - name: Build e push immagine
-        uses: docker/build-push-action@53b7df96c91f9c12dcc8a07bcb9ccacbed38856a # v7.3.0
-        with:
-          context: .
-          push: true
-          build-args: |
-            VERSION=${{ github.event.inputs.tag || github.ref_name }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-
-      # Scan immagine pubblicata — report-only, risultati su tab Security.
-      - name: Trivy image scan
+      # Report completo (anche severità sotto soglia) nella tab Security.
+      - name: Trivy SARIF
+        if: github.event_name != 'pull_request'
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: latest
-          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          version: ${{ env.TRIVY_VERSION }}
+          image-ref: ${{ fromJSON(steps.meta.outputs.json).tags[0] }}
           format: sarif
           output: trivy-image.sarif
-          severity: CRITICAL,HIGH
           ignore-unfixed: true
           exit-code: "0"
+          trivyignores: ${{ github.workspace }}/.trivyignore
 
       - name: Upload Trivy results to Security tab
+        if: github.event_name != 'pull_request'
         uses: github/codeql-action/upload-sarif@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4
         with:
           sarif_file: trivy-image.sarif
+          category: trivy-${{ matrix.name }}

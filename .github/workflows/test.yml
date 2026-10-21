@@ -37,12 +37,12 @@ jobs:
         run: go test ./... -race -v
 
       # Scan bloccante su dipendenze go.mod/go.sum — coglie CVE note prima
-      # ancora di arrivare al build immagine (che scansiona di nuovo,
-      # report-only, in release.yml).
+      # ancora di arrivare al build immagine (che scansiona di nuovo
+      # l'immagine completa, bloccante, in build.yml).
       - name: Trivy scan filesystem dependencies
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: latest # il binario Trivy pinnato di default da questa release dell'action (0.69.1) non installa
+          version: v0.75.0 # tenere allineata a TRIVY_VERSION in build.yml (il default dell'action, 0.69.1, non installa)
           scan-type: fs
           scan-ref: .
           severity: CRITICAL,HIGH

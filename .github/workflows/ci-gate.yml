@@ -1,0 +1,73 @@
+name: CI gate
+
+# Unico required check del ruleset di main. Gli altri workflow hanno filtri
+# paths: e non possono essere required (un check che non parte blocca la PR
+# per sempre). Il gate parte su ogni PR, aspetta che tutti gli altri workflow
+# e check del commit siano completati e fallisce se uno non è verde.
+
+on:
+  pull_request:
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+
+concurrency:
+  group: ci-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  gate:
+    name: CI gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/ci-gate.jq
+          sparse-checkout-cone-mode: false
+
+      - name: Attendi e valuta gli altri check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          SELF_RUN_ID: ${{ github.run_id }}
+        run: |
+          self_wf=$(gh api "repos/$REPO/actions/runs/$SELF_RUN_ID" --jq .workflow_id)
+
+          snapshot() {
+            gh api --paginate "repos/$REPO/actions/runs?head_sha=$SHA&per_page=100" --jq '.workflow_runs[]' > runs.json
+            gh api --paginate "repos/$REPO/commits/$SHA/check-runs?per_page=100" --jq '.check_runs[]' > checks.json
+            jq -n --slurpfile runs runs.json --slurpfile checks checks.json \
+              --argjson self_wf "$self_wf" -f .github/ci-gate.jq > state.json
+          }
+
+          # Lascia ai workflow il tempo di essere accodati.
+          sleep 45
+
+          # Completato = nessun run in corso per due letture consecutive
+          # (un workflow può accodarsi mentre un altro termina).
+          stable=0
+          while [ "$stable" -lt 2 ]; do
+            snapshot
+            pending=$(jq '[.[] | select(.status != "completed")] | length' state.json)
+            if [ "$pending" -eq 0 ]; then
+              stable=$((stable + 1))
+            else
+              stable=0
+              echo "In attesa di $pending check:"
+              jq -r '.[] | select(.status != "completed") | "  - \(.name) (\(.status))"' state.json
+            fi
+            [ "$stable" -lt 2 ] && sleep 30
+          done
+
+          echo "Esito:"
+          jq -r '.[] | "  \(.conclusion)\t\(.kind)\t\(.name)"' state.json
+          failed=$(jq '[.[] | select(.conclusion | IN("success", "skipped", "neutral") | not)] | length' state.json)
+          if [ "$failed" -ne 0 ]; then
+            echo "::error::$failed check non riusciti"
+            exit 1
+          fi

@@ -1,0 +1,84 @@
+name: Dependabot auto-merge
+
+# Patch/minor → auto-merge (squash) quando il required check "CI gate" è verde.
+# Major, tipo non determinato o dipendenze sensibili → PR lasciata aperta con
+# label "revisione-manuale" (fa da promemoria).
+#
+# Il merge usa il token della GitHub App: un merge fatto con GITHUB_TOKEN non
+# avvia i workflow su main (build/push dell'immagine). I workflow avviati da
+# PR dependabot vedono solo i secret Dependabot: APP_CLIENT_ID e
+# APP_PRIVATE_KEY vanno salvati anche lì.
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  # Regex (riga intera, ERE) sui nomi delle dipendenze da non unire mai in automatico.
+  SENSITIVE_DEPS: 'github\.com/go-ldap/ldap/v3'
+
+jobs:
+  automerge:
+    if: github.event.pull_request.user.login == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Dependabot metadata
+        id: meta
+        uses: dependabot/fetch-metadata@25dd0e34f4fe68f24cc83900b1fe3fe149efef98 # v3.1.0
+        with:
+          github-token: ${{ github.token }}
+
+      - name: Decidi
+        id: decide
+        env:
+          UPDATE_TYPE: ${{ steps.meta.outputs.update-type }}
+          DEPS: ${{ steps.meta.outputs.dependency-names }}
+        run: |
+          reason=""
+          case "$UPDATE_TYPE" in
+            version-update:semver-minor|version-update:semver-patch) ;;
+            version-update:semver-major) reason="aggiornamento major" ;;
+            *) reason="tipo di aggiornamento non determinato (\`${UPDATE_TYPE:-vuoto}\`)" ;;
+          esac
+          if [ -z "$reason" ]; then
+            sensitive=$(tr ',' '\n' <<< "$DEPS" | sed 's/^ *//; s/ *$//' | grep -E -x "$SENSITIVE_DEPS" | paste -sd, - || true)
+            if [ -n "$sensitive" ]; then
+              reason="dipendenza sensibile: \`$sensitive\`"
+            fi
+          fi
+          echo "Dipendenze: $DEPS"
+          echo "Tipo: ${UPDATE_TYPE:-vuoto}"
+          echo "Revisione manuale: ${reason:-no}"
+          echo "reason=$reason" >> "$GITHUB_OUTPUT"
+
+      - name: Segnala revisione manuale
+        if: steps.decide.outputs.reason != '' && github.event.action != 'synchronize'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          REASON: ${{ steps.decide.outputs.reason }}
+        run: |
+          gh label create revisione-manuale --repo "$GITHUB_REPOSITORY" \
+            --color D93F0B --description "PR dependabot esclusa dall'auto-merge" 2>/dev/null || true
+          gh pr edit "$PR_URL" --add-label revisione-manuale
+          gh pr comment "$PR_URL" --body "Auto-merge non attivato: $REASON. Da rivedere e unire a mano."
+
+      - name: Token GitHub App
+        if: steps.decide.outputs.reason == ''
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.APP_CLIENT_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Attiva auto-merge
+        if: steps.decide.outputs.reason == ''
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: gh pr merge "$PR_URL" --auto --squash
