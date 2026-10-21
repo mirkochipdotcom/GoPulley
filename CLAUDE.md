@@ -17,7 +17,7 @@ Immagine pubblicata su `ghcr.io/mirkochipdotcom/gopulley`.
 |---|---|
 | `test.yml` | build, vet, `go test -race`, Trivy fs (bloccante) |
 | `build.yml` | build `load` → smoke → Trivy immagine (bloccante, `CRITICAL,HIGH`) → push. Mai push su PR. Cron lunedì 04:00 UTC ripubblica `:latest` da main |
-| `ci-gate.yml` | job `CI gate`: **unico required check** del ruleset di main |
+| `ci-gate.yml` | job `CI gate`: required check del ruleset di main, insieme a `test` |
 | `dependabot-automerge.yml` | patch/minor → `gh pr merge --auto --squash` con token GitHub App; major / tipo vuoto / sensibili → label `revisione-manuale` |
 | `update-behind.yml` | aggiorna una PR dependabot BEHIND alla volta (ruleset strict) |
 | `upstream-check.yml` | issue `upstream` per dipendenze invisibili a dependabot (htmx, binario Trivy) |
@@ -31,6 +31,9 @@ Tag immagine: `:main` (push/cron/dispatch su main), `:sha-<short>` (rollback), `
   esiste `CI gate` (senza filtri) che attende e valuta tutti gli altri run/check del commit (logica in `.github/ci-gate.jq`,
   esclude se stesso, gli eventi `dynamic` e i check dell'app `github-actions`, tiene solo l'esecuzione più recente).
   Aggiungendo un nuovo workflow su PR non serve toccare il ruleset.
+- Required check del ruleset: `CI gate` + `test`. Il gate vede solo i workflow partiti: `test` è richiesto anche per nome
+  così, se `test.yml` venisse disabilitato o rinominato, le PR restano bloccate invece di passare. `test.yml` non deve
+  mai avere filtri `paths:` (un required check che non parte blocca la PR per sempre).
 - **Azioni fatte con `GITHUB_TOKEN` non avviano altri workflow** (merge, push, update-branch). Merge e update-branch usano
   il token della GitHub App (`actions/create-github-app-token`, input `client-id`, `app-id` è deprecato).
 - I workflow avviati da PR dependabot vedono **solo i secret Dependabot**: `APP_CLIENT_ID`/`APP_PRIVATE_KEY` vanno in entrambi.
