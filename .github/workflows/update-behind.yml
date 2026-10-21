@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           gh pr list --repo "$GITHUB_REPOSITORY" --state open --author app/dependabot --limit 100 \
-            --json number,createdAt,autoMergeRequest,mergeStateStatus,statusCheckRollup > prs.json
+            --json number,createdAt,headRefOid,autoMergeRequest,statusCheckRollup > prs.json
 
           # PR con auto-merge e check ancora in corso. Le PR BLOCKED con gate
           # fallito hanno check completati e non vengono contate (altrimenti
@@ -61,8 +61,17 @@ jobs:
             exit 0
           fi
 
-          next=$(jq -r '[.[] | select(.autoMergeRequest != null and .mergeStateStatus == "BEHIND")]
-            | sort_by(.createdAt) | .[0].number // empty' prs.json)
+          # Ritardo rispetto a main dalla compare API: mergeStateStatus è
+          # calcolato in modo asincrono e subito dopo un push vale UNKNOWN.
+          next=""
+          while read -r number sha; do
+            behind=$(gh api "repos/$GITHUB_REPOSITORY/compare/main...$sha" --jq .behind_by)
+            if [ "$behind" -gt 0 ]; then
+              next=$number
+              break
+            fi
+          done < <(jq -r '[.[] | select(.autoMergeRequest != null)]
+            | sort_by(.createdAt) | .[] | "\(.number) \(.headRefOid)"' prs.json)
           if [ -z "$next" ]; then
             echo "Nessuna PR con auto-merge rimasta indietro."
             exit 0
