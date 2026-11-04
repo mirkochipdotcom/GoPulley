@@ -219,8 +219,26 @@
             activeCountFmt: '{{t "dashboard.active_count" 0}}',
             processing: '{{t "dashboard.processing"}}',
             upload: '{{t "dashboard.upload"}}',
-            uploadAndSend: '{{t "dashboard.upload_and_send"}}'
+            uploadAndSend: '{{t "dashboard.upload_and_send"}}',
+            errInvalidEmail: '{{t "dashboard.err_invalid_email"}}'
         };
+
+        // Controllo formale email (il server valida comunque con email.ValidateAddress).
+        // Vuoto = valido (nessun invio). Richiede formato type=email del browser e dominio con punto.
+        function isShareEmailValid(input) {
+            const v = input.value.trim();
+            if (v === '') return true;
+            if (v.length > 254 || !input.checkValidity()) return false;
+            const domain = v.slice(v.lastIndexOf('@') + 1);
+            return /^[^.]+(\.[^.]+)+$/.test(domain);
+        }
+
+        function markShareEmailInvalid(invalid) {
+            const input = document.getElementById('share-email');
+            if (!input) return;
+            if (invalid) input.setAttribute('aria-invalid', 'true');
+            else input.removeAttribute('aria-invalid');
+        }
 
         // Etichetta bottone: "Carica e invia" se il campo email è compilato
         function updateUploadButtonLabel() {
@@ -232,7 +250,15 @@
         }
         (function () {
             const emailInput = document.getElementById('share-email');
-            if (emailInput) emailInput.addEventListener('input', updateUploadButtonLabel);
+            if (!emailInput) return;
+            emailInput.addEventListener('input', function () {
+                updateUploadButtonLabel();
+                // Toglie l'evidenziazione d'errore appena l'indirizzo torna valido
+                if (isShareEmailValid(emailInput)) markShareEmailInvalid(false);
+            });
+            emailInput.addEventListener('blur', function () {
+                markShareEmailInvalid(!isShareEmailValid(emailInput));
+            });
         })();
 
         // ── File selection ──────────────────────────────────────
@@ -454,6 +480,7 @@
         function resetUploadForm() {
             document.getElementById('upload-form').reset();
             updateUploadButtonLabel();
+            markShareEmailInvalid(false);
             document.getElementById('drop-title').textContent = I18N.dragHere;
             document.getElementById('dropzone').classList.remove('has-file');
             setUploadUIBusy(false);
@@ -522,6 +549,17 @@
             const password = document.getElementById('password-input').value;
             const maxDlRaw = document.getElementById('max-downloads').value;
             const maxDownloads = maxDlRaw ? parseInt(maxDlRaw, 10) : 0;
+
+            // 0. Email check before sending any chunk
+            const emailInput = document.getElementById('share-email');
+            if (emailInput && !isShareEmailValid(emailInput)) {
+                const panel = document.getElementById('advanced-options');
+                if (panel && !panel.classList.contains('show')) toggleAdvancedOptions();
+                markShareEmailInvalid(true);
+                showUploadError(I18N.errInvalidEmail);
+                emailInput.focus();
+                return;
+            }
 
             setUploadUIBusy(true);
             document.getElementById('upload-result').innerHTML = '';
@@ -654,7 +692,8 @@
                 
                 const completeData = await completeResp.json();
                 if (!completeResp.ok) {
-                    const errs = { missing_chunks: I18N.errMissingChunks };
+                    const errs = { missing_chunks: I18N.errMissingChunks, invalid_email: I18N.errInvalidEmail };
+                    if (completeData.error === 'invalid_email') markShareEmailInvalid(true);
                     showUploadError(errs[completeData.error] || I18N.errCompletion);
                     setUploadUIBusy(false);
                     hideProgressBar();

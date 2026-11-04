@@ -19,6 +19,10 @@ import (
 // If optionalUserEmail and optionalUserPassword are provided, they take precedence
 // over the global SMTP configuration (useful when SMTPUserAuth is enabled).
 func SendShareEmail(to string, downloadURL string, filename string, expirationDays int, isPasswordProtected bool, senderUsername string, cfg *config.Config, optionalUserEmail string, optionalUserPassword string) error {
+	if err := ValidateAddress(to); err != nil {
+		return fmt.Errorf("recipient %q: %w", to, err)
+	}
+
 	smtpServer := cfg.SMTPServer
 	smtpPort := cfg.SMTPPort
 	smtpSecurity := strings.ToLower(strings.TrimSpace(cfg.SMTPSecurity))
