@@ -508,6 +508,10 @@ func (a *App) handleUpload(w http.ResponseWriter, r *http.Request) {
 	}
 
 	shareEmail := strings.TrimSpace(r.FormValue("share_email"))
+	if shareEmail != "" && email.ValidateAddress(shareEmail) != nil {
+		http.Error(w, "invalid email address", http.StatusBadRequest)
+		return
+	}
 
 	var userEmail string
 	var userPassword string
@@ -1220,6 +1224,11 @@ func (a *App) handleUploadComplete(w http.ResponseWriter, r *http.Request, sessi
 	// It's acceptable if jsondecode fails, e.g. empty body
 	_ = jsonDecode(r, &reqPayload)
 	shareEmail := strings.TrimSpace(reqPayload.ShareEmail)
+	// Rejected before finalizing: the session stays intact so the client can retry.
+	if shareEmail != "" && email.ValidateAddress(shareEmail) != nil {
+		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_email"})
+		return
+	}
 
 	var userEmail string
 	var userPassword string

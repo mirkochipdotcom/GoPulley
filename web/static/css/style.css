@@ -929,6 +929,11 @@ a:hover {
   box-shadow: 0 0 0 2px var(--c-accent-glow);
 }
 
+.input-group input[aria-invalid="true"] {
+  border-color: var(--c-danger);
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.2);
+}
+
 /* Upload result card */
 .upload-result {
   margin-top: 1rem;
