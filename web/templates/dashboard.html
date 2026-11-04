@@ -155,7 +155,7 @@
                             <line x1="12" y1="3" x2="12" y2="15" />
                             <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
                         </svg>
-                        {{t "dashboard.upload"}}
+                        <span id="upload-btn-label">{{t "dashboard.upload"}}</span>
                     </button>
                     <button type="button" class="btn btn-ghost" id="upload-cancel-btn" style="display:none;"
                         onclick="cancelUpload()">{{t "dashboard.cancel"}}</button>
@@ -217,8 +217,23 @@
             expiresInDays: '{{t "dashboard.expires_in_days"}}',
             copyLink: '{{t "dashboard.copy_link"}}',
             activeCountFmt: '{{t "dashboard.active_count" 0}}',
-            processing: '{{t "dashboard.processing"}}'
+            processing: '{{t "dashboard.processing"}}',
+            upload: '{{t "dashboard.upload"}}',
+            uploadAndSend: '{{t "dashboard.upload_and_send"}}'
         };
+
+        // Etichetta bottone: "Carica e invia" se il campo email è compilato
+        function updateUploadButtonLabel() {
+            const label = document.getElementById('upload-btn-label');
+            if (!label) return;
+            const emailInput = document.getElementById('share-email');
+            const hasEmail = !!(emailInput && emailInput.value.trim() !== '');
+            label.textContent = hasEmail ? I18N.uploadAndSend : I18N.upload;
+        }
+        (function () {
+            const emailInput = document.getElementById('share-email');
+            if (emailInput) emailInput.addEventListener('input', updateUploadButtonLabel);
+        })();
 
         // ── File selection ──────────────────────────────────────
         function showDropLoading() {
@@ -260,9 +275,22 @@
             }, 200);
         });
 
+        // Rimuove il link/esito dell'upload precedente quando l'utente avvia un'altra operazione
+        function clearUploadResult() {
+            const result = document.getElementById('upload-result');
+            if (result) result.innerHTML = '';
+        }
+
+        // Azioni utente sulla lista (elimina, calcolo SHA-256); escluso il refresh automatico (GET)
+        document.body.addEventListener('htmx:beforeRequest', function (evt) {
+            const verb = evt.detail && evt.detail.requestConfig && evt.detail.requestConfig.verb;
+            if (verb && verb.toLowerCase() !== 'get') clearUploadResult();
+        });
+
         function onFileSelected(input) {
             if (input.files.length === 0) return;
             pickerOpen = false;
+            clearUploadResult();
             afterPaint(() => {
                 document.getElementById('drop-title').textContent = input.files[0].name;
                 document.getElementById('dropzone').classList.add('has-file');
@@ -292,6 +320,7 @@
             if (files.length === 0) return;
             const fileName = files[0].name;
             const file = files[0];
+            clearUploadResult();
             showDropLoading();
             afterPaint(() => {
                 const input = document.getElementById('file-input');
@@ -424,6 +453,7 @@
 
         function resetUploadForm() {
             document.getElementById('upload-form').reset();
+            updateUploadButtonLabel();
             document.getElementById('drop-title').textContent = I18N.dragHere;
             document.getElementById('dropzone').classList.remove('has-file');
             setUploadUIBusy(false);
