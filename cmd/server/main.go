@@ -961,8 +961,8 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sanitize filename
-	req.Filename = filepath.Base(req.Filename)
-	if req.Filename == "." || req.Filename == "" {
+	req.Filename = storage.SanitizeFilename(req.Filename)
+	if req.Filename == "" {
 		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "invalid_filename"})
 		return
 	}
@@ -1021,13 +1021,19 @@ func (a *App) handleUploadInit(w http.ResponseWriter, r *http.Request) {
 	sessionToken := uuid.New().String()
 	expiresAt := time.Now().UTC().Add(time.Duration(a.cfg.UploadSessionTTLSeconds) * time.Second)
 
-	if err := os.MkdirAll(storage.ChunkDir(a.cfg.UploadDir, sessionToken), 0750); err != nil {
+	chunkDir, err := storage.ChunkDir(a.cfg.UploadDir, sessionToken)
+	if err != nil {
+		logger.Error("upload init chunk dir: %v", err)
+		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
+		return
+	}
+	if err := os.MkdirAll(chunkDir, 0750); err != nil {
 		logger.Error("upload init mkdir: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
 		return
 	}
 
-	_, err := a.db.CreateUploadSession(sessionToken, username, req.Filename, req.Size, req.TotalChunks, req.ChunkSize, expiresAt, req.Days, passwordHash, req.MaxDownloads)
+	_, err = a.db.CreateUploadSession(sessionToken, username, req.Filename, req.Size, req.TotalChunks, req.ChunkSize, expiresAt, req.Days, passwordHash, req.MaxDownloads)
 	if err != nil {
 		logger.Error("upload init db: %v", err)
 		jsonResponse(w, http.StatusInternalServerError, jsonObj{"error": "server_error"})
@@ -1193,7 +1199,9 @@ func (a *App) handleUploadChunk(w http.ResponseWriter, r *http.Request, sessionT
 		return
 	}
 	if bytesWritten > expectedSize {
-		os.Remove(storage.ChunkFilePath(a.cfg.UploadDir, sessionToken, chunkIndex))
+		if chunkPath, err := storage.ChunkFilePath(a.cfg.UploadDir, sessionToken, chunkIndex); err == nil {
+			os.Remove(chunkPath)
+		}
 		jsonResponse(w, http.StatusBadRequest, jsonObj{"error": "chunk_too_large"})
 		return
 	}
@@ -1630,6 +1638,12 @@ func main() {
 			return
 		}
 		session := parts[0]
+		// Session tokens are server-generated UUIDs: reject anything else before
+		// it reaches the database or the filesystem.
+		if !storage.ValidSessionToken(session) {
+			http.Error(w, "not found", 404)
+			return
+		}
 		// DELETE /api/upload/{session} — abort
 		if r.Method == http.MethodDelete && len(parts) == 1 {
 			app.handleUploadAbort(w, r, session)

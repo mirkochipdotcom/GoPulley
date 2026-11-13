@@ -29,11 +29,24 @@ func TestHumanSize(t *testing.T) {
 	}
 }
 
-func TestChunkDir_SanitizesTraversal(t *testing.T) {
-	uploadDir := t.TempDir()
+const testSession = "0b1c2d3e-4f50-4617-8829-3a4b5c6d7e8f"
 
-	got := ChunkDir(uploadDir, "../../etc/passwd")
-	want := filepath.Join(uploadDir, ".chunks", "passwd")
+func TestChunkDir_RejectsNonUUID(t *testing.T) {
+	uploadDir := t.TempDir()
+	for _, s := range []string{"", ".", "..", "../../etc/passwd", "session1", "a/b", testSession + "/.."} {
+		if got, err := ChunkDir(uploadDir, s); err == nil {
+			t.Errorf("ChunkDir(%q) = %q, want error", s, got)
+		}
+	}
+}
+
+func TestChunkDir_UsesCanonicalUUID(t *testing.T) {
+	uploadDir := t.TempDir()
+	got, err := ChunkDir(uploadDir, strings.ToUpper(testSession))
+	if err != nil {
+		t.Fatalf("ChunkDir() error: %v", err)
+	}
+	want := filepath.Join(uploadDir, ".chunks", testSession)
 	if got != want {
 		t.Errorf("ChunkDir() = %q, want %q", got, want)
 	}
@@ -41,16 +54,65 @@ func TestChunkDir_SanitizesTraversal(t *testing.T) {
 
 func TestChunkFilePath(t *testing.T) {
 	uploadDir := t.TempDir()
-	got := ChunkFilePath(uploadDir, "session1", 3)
-	want := filepath.Join(uploadDir, ".chunks", "session1", "chunk_000003")
+	got, err := ChunkFilePath(uploadDir, testSession, 3)
+	if err != nil {
+		t.Fatalf("ChunkFilePath() error: %v", err)
+	}
+	want := filepath.Join(uploadDir, ".chunks", testSession, "chunk_000003")
 	if got != want {
 		t.Errorf("ChunkFilePath() = %q, want %q", got, want)
+	}
+	if _, err := ChunkFilePath(uploadDir, testSession, -1); err == nil {
+		t.Error("ChunkFilePath() with negative index: want error, got nil")
+	}
+}
+
+func TestCleanupChunkDir_RejectsTraversal(t *testing.T) {
+	uploadDir := t.TempDir()
+	keep := filepath.Join(uploadDir, "keep.txt")
+	if err := os.WriteFile(keep, []byte("x"), 0640); err != nil {
+		t.Fatalf("write file: %v", err)
+	}
+	if err := CleanupChunkDir(uploadDir, ".."); err == nil {
+		t.Error("CleanupChunkDir(\"..\"): want error, got nil")
+	}
+	if _, err := os.Stat(keep); err != nil {
+		t.Errorf("upload dir content removed: %v", err)
+	}
+}
+
+func TestSaveChunk_RejectsInvalidSession(t *testing.T) {
+	uploadDir := t.TempDir()
+	if _, err := SaveChunk(uploadDir, "../x", 0, strings.NewReader("data")); err == nil {
+		t.Fatal("SaveChunk() with invalid session: want error, got nil")
+	}
+}
+
+func TestSanitizeFilename(t *testing.T) {
+	cases := map[string]string{
+		"report.pdf":              "report.pdf",
+		"../../etc/passwd":        "passwd",
+		"a\r\nBcc: x@example.com": "aBcc: x@example.com",
+		"nul\x00byte.txt":         "nulbyte.txt",
+		"  spaced.txt  ":          "spaced.txt",
+		"fattura è €.pdf":         "fattura è €.pdf",
+		"":                        "",
+		".":                       "",
+		"..":                      "",
+		"/":                       "",
+		"dir/..":                  "",
+		"\r\n":                    "",
+	}
+	for in, want := range cases {
+		if got := SanitizeFilename(in); got != want {
+			t.Errorf("SanitizeFilename(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 
 func TestSaveChunk_ComposeChunks_Roundtrip(t *testing.T) {
 	uploadDir := t.TempDir()
-	session := "sess-abc"
+	session := testSession
 
 	parts := []string{"hello ", "world", "!"}
 	for i, p := range parts {
@@ -80,14 +142,18 @@ func TestSaveChunk_ComposeChunks_Roundtrip(t *testing.T) {
 	if err := CleanupChunkDir(uploadDir, session); err != nil {
 		t.Fatalf("CleanupChunkDir() error: %v", err)
 	}
-	if _, err := os.Stat(ChunkDir(uploadDir, session)); !os.IsNotExist(err) {
+	dir, err := ChunkDir(uploadDir, session)
+	if err != nil {
+		t.Fatalf("ChunkDir() error: %v", err)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
 		t.Error("chunk dir still exists after CleanupChunkDir()")
 	}
 }
 
 func TestSaveChunk_IsIdempotent(t *testing.T) {
 	uploadDir := t.TempDir()
-	session := "sess-idem"
+	session := testSession
 
 	if _, err := SaveChunk(uploadDir, session, 0, strings.NewReader("first")); err != nil {
 		t.Fatalf("first SaveChunk error: %v", err)
@@ -96,7 +162,11 @@ func TestSaveChunk_IsIdempotent(t *testing.T) {
 		t.Fatalf("second SaveChunk error: %v", err)
 	}
 
-	got, err := os.ReadFile(ChunkFilePath(uploadDir, session, 0))
+	chunkPath, err := ChunkFilePath(uploadDir, session, 0)
+	if err != nil {
+		t.Fatalf("ChunkFilePath() error: %v", err)
+	}
+	got, err := os.ReadFile(chunkPath)
 	if err != nil {
 		t.Fatalf("read chunk: %v", err)
 	}
@@ -109,9 +179,13 @@ func TestComposeChunks_RejectsPathTraversal(t *testing.T) {
 	uploadDir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "evil.txt")
 
-	err := ComposeChunks(uploadDir, "sess", 1, outside)
+	err := ComposeChunks(uploadDir, testSession, 1, outside)
 	if err == nil {
 		t.Fatal("ComposeChunks() with dest outside uploadDir: want error, got nil")
+	}
+	// Sibling directory sharing the prefix (/data/uploads vs /data/uploads2).
+	if err := ComposeChunks(uploadDir, testSession, 1, uploadDir+"2/evil.txt"); err == nil {
+		t.Fatal("ComposeChunks() with dest in prefix-sibling dir: want error, got nil")
 	}
 }
 

@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"html"
 	"log"
+	"mime"
 	"net"
 	"net/smtp"
 	"net/url"
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/youorg/gopulley/internal/config"
 )
@@ -268,6 +270,24 @@ func resolveEmailBrandLogoURL(cfg *config.Config, baseURL string) string {
 	return strings.TrimRight(baseURL, "/") + "/brand-logo"
 }
 
+// stripControl drops CR, LF and the other control characters, so a value cannot
+// end a header line and inject new headers or body content.
+func stripControl(v string) string {
+	return strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, v)
+}
+
+// encodeHeader makes an untrusted text value safe for a header line: control
+// characters are dropped and non-ASCII text is RFC 2047 encoded, which also
+// keeps accented file names readable.
+func encodeHeader(v string) string {
+	return mime.QEncoding.Encode("utf-8", stripControl(v))
+}
+
 func buildEmailMessage(from string, to string, subject string, htmlBody string) []byte {
 	hostname, err := os.Hostname()
 	if err != nil || hostname == "" {
@@ -279,9 +299,9 @@ func buildEmailMessage(from string, to string, subject string, htmlBody string) 
 
 	// RFC-compliant CRLF line endings prevent strict relays from rejecting DATA finalization.
 	headers := []string{
-		"From: " + from,
-		"To: " + to,
-		"Subject: " + subject,
+		"From: " + stripControl(from),
+		"To: " + stripControl(to),
+		"Subject: " + encodeHeader(subject),
 		"Date: " + now,
 		"Message-ID: " + msgID,
 		"MIME-Version: 1.0",

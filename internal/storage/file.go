@@ -3,6 +3,7 @@ package storage
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"mime/multipart"
@@ -10,9 +11,28 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode"
 
 	"github.com/google/uuid"
 )
+
+// SanitizeFilename reduces a client-supplied file name to a safe base name:
+// directory components are dropped and control characters (CR, LF, NUL, ...)
+// are removed, since the name ends up in paths, HTML and email headers.
+// It returns "" when nothing usable is left.
+func SanitizeFilename(name string) string {
+	name = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, name)
+	name = strings.TrimSpace(filepath.Base(name))
+	if name == "." || name == ".." || name == "/" {
+		return ""
+	}
+	return name
+}
 
 // SaveFile stores an uploaded file under uploadDir/<uuid>/<originalFilename>
 // and returns the full path, original filename, and file size in bytes.
@@ -23,7 +43,10 @@ func SaveFile(header *multipart.FileHeader, uploadDir string) (filePath, origina
 	}
 	defer src.Close()
 
-	originalName = filepath.Base(header.Filename)
+	originalName = SanitizeFilename(header.Filename)
+	if originalName == "" {
+		return "", "", 0, fmt.Errorf("invalid filename")
+	}
 	dir := filepath.Join(uploadDir, uuid.New().String())
 	if err = os.MkdirAll(dir, 0750); err != nil {
 		return "", "", 0, fmt.Errorf("mkdir: %w", err)
@@ -111,29 +134,57 @@ func HumanSize(bytes int64) string {
 
 // ── Chunked upload helpers ───────────────────────────────────────────────────
 
+// ErrInvalidSession is returned when an upload session token is not a UUID.
+var ErrInvalidSession = errors.New("invalid upload session token")
+
+// ValidSessionToken reports whether s is a valid upload session token (a UUID).
+func ValidSessionToken(s string) bool {
+	_, err := uuid.Parse(s)
+	return err == nil
+}
+
 // ChunkDir returns the directory where chunks for a session are stored.
-func ChunkDir(uploadDir, session string) string {
-	// Sanitize session to prevent path traversal (session should be a UUID).
-	clean := filepath.Base(session)
-	return filepath.Join(uploadDir, ".chunks", clean)
+// Session tokens are server-generated UUIDs: anything else is rejected, and the
+// path is built from the canonical UUID form, so it cannot contain separators
+// or "..".
+func ChunkDir(uploadDir, session string) (string, error) {
+	id, err := uuid.Parse(session)
+	if err != nil {
+		return "", ErrInvalidSession
+	}
+	return filepath.Join(uploadDir, ".chunks", id.String()), nil
 }
 
 // ChunkFilePath returns the path for a specific chunk file within a session.
-func ChunkFilePath(uploadDir, session string, index int) string {
-	return filepath.Join(ChunkDir(uploadDir, session), fmt.Sprintf("chunk_%06d", index))
+func ChunkFilePath(uploadDir, session string, index int) (string, error) {
+	if index < 0 {
+		return "", fmt.Errorf("invalid chunk index %d", index)
+	}
+	dir, err := ChunkDir(uploadDir, session)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, fmt.Sprintf("chunk_%06d", index)), nil
+}
+
+// isWithin reports whether path p is inside directory base.
+func isWithin(base, p string) bool {
+	rel, err := filepath.Rel(filepath.Clean(base), filepath.Clean(p))
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
 
 // SaveChunk writes raw bytes to the chunk file for the given session and index.
 // It is idempotent: re-writing an existing chunk overwrites it.
 func SaveChunk(uploadDir, session string, index int, data io.Reader) (int64, error) {
-	dir := ChunkDir(uploadDir, session)
-	if err := os.MkdirAll(dir, 0750); err != nil {
-		return 0, fmt.Errorf("mkdir chunk dir: %w", err)
+	chunkPath, err := ChunkFilePath(uploadDir, session, index)
+	if err != nil {
+		return 0, err
 	}
-	// Guard against path traversal via session (double-check)
-	chunkPath := ChunkFilePath(uploadDir, session, index)
-	if !strings.HasPrefix(filepath.Clean(chunkPath), filepath.Clean(uploadDir)) {
-		return 0, fmt.Errorf("invalid chunk path: path traversal detected")
+	if err := os.MkdirAll(filepath.Dir(chunkPath), 0750); err != nil {
+		return 0, fmt.Errorf("mkdir chunk dir: %w", err)
 	}
 
 	f, err := os.OpenFile(chunkPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
@@ -155,8 +206,11 @@ func SaveChunk(uploadDir, session string, index int, data io.Reader) (int64, err
 // The caller is responsible for cleaning up chunk files after a successful compose.
 func ComposeChunks(uploadDir, session string, totalChunks int, destPath string) error {
 	// Guard against path traversal in destPath
-	if !strings.HasPrefix(filepath.Clean(destPath), filepath.Clean(uploadDir)) {
+	if !isWithin(uploadDir, destPath) {
 		return fmt.Errorf("invalid dest path: path traversal detected")
+	}
+	if !ValidSessionToken(session) {
+		return ErrInvalidSession
 	}
 
 	dst, err := os.OpenFile(destPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0640)
@@ -166,7 +220,10 @@ func ComposeChunks(uploadDir, session string, totalChunks int, destPath string) 
 	defer dst.Close()
 
 	for i := 0; i < totalChunks; i++ {
-		chunkPath := ChunkFilePath(uploadDir, session, i)
+		chunkPath, err := ChunkFilePath(uploadDir, session, i)
+		if err != nil {
+			return err
+		}
 		cf, err := os.Open(chunkPath)
 		if err != nil {
 			return fmt.Errorf("open chunk %d: %w", i, err)
@@ -181,6 +238,11 @@ func ComposeChunks(uploadDir, session string, totalChunks int, destPath string) 
 }
 
 // CleanupChunkDir removes the entire chunk directory for a session.
+// An invalid token is rejected instead of being resolved to some other directory.
 func CleanupChunkDir(uploadDir, session string) error {
-	return os.RemoveAll(ChunkDir(uploadDir, session))
+	dir, err := ChunkDir(uploadDir, session)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(dir)
 }
