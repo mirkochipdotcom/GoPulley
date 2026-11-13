@@ -5,11 +5,15 @@ Immagine pubblicata su `ghcr.io/mirkochipdotcom/gopulley`.
 
 ## Sviluppo
 
-- `go-sqlite3` richiede CGO: su Windows senza gcc i test vanno lanciati in container:
+- `go-sqlite3` richiede CGO: su Windows senza gcc i test vanno lanciati in container (su Linux `$(pwd)` al posto di `$(pwd -W)`):
   `docker run --rm -v "$(pwd -W):/src" -w /src -e CGO_ENABLED=1 golang:1.27-alpine sh -c 'apk add -q gcc musl-dev && go test ./... -race'`
 - `LDAP_HOST=mock` (default) accetta qualsiasi credenziale: il codice di `go-ldap` non è coperto dai test.
+- Prova manuale (la CI non copre il JS): `docker build -t gopulley:dev . && docker run --rm -p 127.0.0.1:18080:8080 -e SESSION_SECRET=<32+ caratteri> -e SECURE_COOKIES=false -e ADMIN_USERS=admin gopulley:dev` (login con qualsiasi password in mock).
 - htmx è vendorizzato in `web/static/js/htmx-<versione>.min.js` (versione nel nome del file, letta da `upstream-check.yml`).
   Per aggiornarlo: sostituire il file e i riferimenti in `web/templates/*.html`.
+- htmx 4: eventi `htmx:before:request`/`htmx:after:request`/`htmx:after:swap`, metodo e status in `e.detail.ctx`. Il `<meta name="htmx-config">`
+  con `noSwap: [204, 304, "4xx", "5xx"]` in login/dashboard/admin evita lo swap delle risposte di errore: tenerlo. Verifica: `upgrade-check.py` del pacchetto npm.
+- Versione Go allineata in tre punti: `FROM golang:X-alpine` nel `Dockerfile`, `go-version` in `test.yml`, direttiva `go` in `go.mod`.
 
 ## CI/CD
 
@@ -49,6 +53,9 @@ Tag immagine: `:main` (push/cron/dispatch su main), `:sha-<short>` (rollback), `
   `gh api repos/<action>/git/ref/tags/<tag>` verificando `object.type == "commit"`.
 - Versione Trivy: `TRIVY_VERSION` in `build.yml` e `version:` in `test.yml` vanno tenute allineate.
 - `actionlint` prima di committare workflow: `docker run --rm -v "$(pwd -W):/repo" -w /repo rhysd/actionlint:1.7.7`.
+- Code scanning: CodeQL sulle PR analizza solo le righe cambiate (0 risultati sulla PR non vuol dire alert chiusi: verificare su main dopo il merge).
+  Gli alert Trivy dei tag `v*` restano aperti per sempre (i tag non vengono riscansionati): si chiudono a mano come "won't fix".
+- Release: tag annotato `vX.Y.Z` con messaggio `vX.Y.Z` su main dopo il merge.
 
 ### Deploy
 
