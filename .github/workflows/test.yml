@@ -23,7 +23,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
-          go-version: '1.26'
+          go-version: '1.27'
 
       - name: Build
         run: go build ./...
@@ -42,7 +42,7 @@ jobs:
       - name: Trivy scan filesystem dependencies
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          version: v0.75.0 # tenere allineata a TRIVY_VERSION in build.yml (il default dell'action, 0.69.1, non installa)
+          version: v0.76.2 # tenere allineata a TRIVY_VERSION in build.yml (il default dell'action, 0.69.1, non installa)
           scan-type: fs
           scan-ref: .
           severity: CRITICAL,HIGH

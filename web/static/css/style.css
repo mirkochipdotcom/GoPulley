@@ -284,7 +284,8 @@ a:hover {
   animation: spin 0.7s linear infinite;
 }
 
-.htmx-request .spinner-ring {
+.htmx-request .spinner-ring,
+.htmx-request.spinner-ring {
   display: inline-block;
 }
 

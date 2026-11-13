@@ -4,12 +4,14 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- htmx 4 fa lo swap anche delle risposte 4xx/5xx: come in htmx 2, gli errori non sostituiscono il contenuto -->
+    <meta name="htmx-config" content='{"noSwap": [204, 304, "4xx", "5xx"]}' />
     <title>GoPulley — {{t "admin.page_title"}}</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/css/style.css" />
-    <script src="/static/js/htmx-2.0.4.min.js" defer></script>
+    <script src="/static/js/htmx-4.0.1.min.js" defer></script>
 </head>
 
 <body class="dash-body">
@@ -192,8 +194,9 @@
 {{end}}
     {{if .IsAdmin}}
     <script>
-        document.body.addEventListener('htmx:afterRequest', function (e) {
-            if (e.detail.successful && e.detail.requestConfig.verb === 'delete') {
+        document.body.addEventListener('htmx:after:request', function (e) {
+            const ctx = e.detail.ctx;
+            if (ctx && ctx.request.method === 'DELETE' && ctx.response && ctx.response.status >= 200 && ctx.response.status < 300) {
                 window.location.reload();
             }
         });
