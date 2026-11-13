@@ -28,7 +28,10 @@ RUN CGO_ENABLED=1 GOOS=linux \
 # alpine gives us CA certs (needed for LDAPS) and a minimal libc
 FROM alpine:3.24
 
-RUN apk add --no-cache ca-certificates tzdata \
+# apk upgrade: picks up security fixes already in the Alpine repositories
+# before the base image tag is republished (e.g. zlib CVE-2026-4738).
+RUN apk upgrade --no-cache \
+  && apk add --no-cache ca-certificates tzdata \
   && adduser -D -u 1001 gopulley \
   && mkdir -p /data/uploads \
   && chown -R gopulley:gopulley /data
