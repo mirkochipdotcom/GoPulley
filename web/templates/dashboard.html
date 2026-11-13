@@ -4,6 +4,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- htmx 4 fa lo swap anche delle risposte 4xx/5xx: come in htmx 2, gli errori non sostituiscono il contenuto -->
+    <meta name="htmx-config" content='{"noSwap": [204, 304, "4xx", "5xx"]}' />
     <title>GoPulley — {{t "dashboard.page_title"}}</title>
     <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -189,7 +191,7 @@
     <!-- ── Toast ── -->
     <div id="toast" class="toast" aria-live="polite"></div>
 
-    <script src="/static/js/htmx-2.0.4.min.js"></script>
+    <script src="/static/js/htmx-4.0.1.min.js"></script>
     <script>
         const I18N = {
             dragHere: '{{t "dashboard.drag_here"}}',
@@ -308,9 +310,9 @@
         }
 
         // Azioni utente sulla lista (elimina, calcolo SHA-256); escluso il refresh automatico (GET)
-        document.body.addEventListener('htmx:beforeRequest', function (evt) {
-            const verb = evt.detail && evt.detail.requestConfig && evt.detail.requestConfig.verb;
-            if (verb && verb.toLowerCase() !== 'get') clearUploadResult();
+        document.body.addEventListener('htmx:before:request', function (evt) {
+            const method = evt.detail && evt.detail.ctx && evt.detail.ctx.request.method;
+            if (method && method !== 'GET') clearUploadResult();
         });
 
         function onFileSelected(input) {
@@ -743,15 +745,15 @@
         }
 
         // HTMX events for delete/refresh
-        document.body.addEventListener('htmx:afterRequest', function (e) {
-            if (e.detail.requestConfig && e.detail.requestConfig.verb === 'delete') {
+        document.body.addEventListener('htmx:after:request', function (e) {
+            if (e.detail.ctx && e.detail.ctx.request.method === 'DELETE') {
                 htmx.trigger('#shares-list', 'refresh');
             }
         });
 
         // Aggiorna il contatore dopo ogni refresh HTMX della lista
-        document.body.addEventListener('htmx:afterSettle', function (e) {
-            if (e.detail.elt && e.detail.elt.id === 'shares-list') {
+        document.body.addEventListener('htmx:after:swap', function (e) {
+            if (e.target.id === 'shares-list') {
                 const rows = document.querySelectorAll('#shares-list tbody tr');
                 const badge = document.getElementById('shares-count');
                 if (badge) badge.textContent = I18N.activeCountFmt.replace('0', rows.length);

@@ -4,6 +4,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <!-- htmx 4 fa lo swap anche delle risposte 4xx/5xx: come in htmx 2, gli errori non sostituiscono il contenuto -->
+  <meta name="htmx-config" content='{"noSwap": [204, 304, "4xx", "5xx"]}' />
   <title>GoPulley — Login</title>
   <link rel="icon" type="image/svg+xml" href="/static/img/logo-icon.svg" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -57,7 +59,7 @@
     <a href="https://github.com/mirkochipdotcom/GoPulley" target="_blank" rel="noopener">{{.Version}}</a>
   </div>
 
-  <script src="/static/js/htmx-2.0.4.min.js"></script>
+  <script src="/static/js/htmx-4.0.1.min.js"></script>
 </body>
 
 </html>

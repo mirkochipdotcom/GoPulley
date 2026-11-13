@@ -30,7 +30,7 @@ on:
 env:
   REGISTRY: ghcr.io
   # Versione del binario Trivy: tracciata da upstream-check.yml (dependabot non la vede).
-  TRIVY_VERSION: v0.75.0
+  TRIVY_VERSION: v0.76.2
 
 concurrency:
   group: build-${{ github.ref }}
